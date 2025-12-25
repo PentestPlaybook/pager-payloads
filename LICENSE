@@ -1,0 +1,43 @@
+MIT License
+
+Copyright (c) 2025 alobe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+ADDITIONAL DISCLAIMER FOR SECURITY TOOLS
+
+The payloads and scripts in this repository are designed for security research,
+penetration testing, and educational purposes only. Users must ensure they have
+explicit authorization before using these tools on any network or system.
+
+Unauthorized access to computer systems is illegal under various laws including
+but not limited to the Computer Fraud and Abuse Act (CFAA) in the United States
+and similar legislation in other jurisdictions.
+
+By using this software, you acknowledge that:
+1. You will only use these tools on networks and systems you own or have 
+   explicit written permission to test
+2. You accept full responsibility for your actions
+3. The authors and contributors are not liable for any misuse or damage
+4. You will comply with all applicable local, state, federal, and 
+   international laws
+
+Use at your own risk.
