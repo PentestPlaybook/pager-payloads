@@ -2,7 +2,7 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Evil Portal
 
 LOG "Starting Evil Portal installation for WiFi Pineapple Pager..."
@@ -456,6 +456,56 @@ restart() {
     start
 }
 
+enable() {
+    # Add firewall NAT rules
+    uci add firewall redirect
+    uci set firewall.@redirect[-1].name='Evil Portal HTTPS'
+    uci set firewall.@redirect[-1].src='lan'
+    uci set firewall.@redirect[-1].proto='tcp'
+    uci set firewall.@redirect[-1].src_dport='443'
+    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_port='80'
+    uci set firewall.@redirect[-1].target='DNAT'
+
+    uci add firewall redirect
+    uci set firewall.@redirect[-1].name='Evil Portal HTTP'
+    uci set firewall.@redirect[-1].src='lan'
+    uci set firewall.@redirect[-1].proto='tcp'
+    uci set firewall.@redirect[-1].src_dport='80'
+    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_port='80'
+    uci set firewall.@redirect[-1].target='DNAT'
+
+    uci add firewall redirect
+    uci set firewall.@redirect[-1].name='Evil Portal DNS TCP'
+    uci set firewall.@redirect[-1].src='lan'
+    uci set firewall.@redirect[-1].proto='tcp'
+    uci set firewall.@redirect[-1].src_dport='53'
+    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_port='5353'
+    uci set firewall.@redirect[-1].target='DNAT'
+
+    uci add firewall redirect
+    uci set firewall.@redirect[-1].name='Evil Portal DNS UDP'
+    uci set firewall.@redirect[-1].src='lan'
+    uci set firewall.@redirect[-1].proto='udp'
+    uci set firewall.@redirect[-1].src_dport='53'
+    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_port='5353'
+    uci set firewall.@redirect[-1].target='DNAT'
+
+    uci commit firewall
+    /etc/init.d/firewall restart
+    
+    # Create boot symlink
+    ln -sf /etc/init.d/evilportal /etc/rc.d/S99evilportal
+    
+    # Start services
+    start
+    
+    logger -t evilportal "Evil Portal enabled and started"
+}
+
 disable() {
     # Stop services first
     stop
@@ -660,10 +710,11 @@ LOG "API files: /pineapple/ui/modules/evilportal/assets/api/"
 LOG "Init script: /etc/init.d/evilportal"
 LOG ""
 LOG "Management commands:"
+LOG "  Enable:  /etc/init.d/evilportal enable"
+LOG "  Disable: /etc/init.d/evilportal disable"
 LOG "  Start:   /etc/init.d/evilportal start"
 LOG "  Stop:    /etc/init.d/evilportal stop"
 LOG "  Restart: /etc/init.d/evilportal restart"
-LOG "  Disable: /etc/init.d/evilportal disable"
 LOG "===================================================="
 
 exit 0
