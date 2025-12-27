@@ -1,7 +1,7 @@
 #!/bin/bash
 # Name: Configure Evil Network
 # Description: Create isolated evil network on wlan0wpa with separate IP range
-# Author: alobe
+# Author: PentestPlaybook
 # Version: 1.0
 # Category: Network
 
