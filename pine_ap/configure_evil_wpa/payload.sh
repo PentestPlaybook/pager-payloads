@@ -1,11 +1,11 @@
 #!/bin/bash
-# Name: Configure WPA
-# Description: Sets up and enables the WPA portal interface (wlan0wpa)
+# Name: Configure Evil WPA
+# Description: Sets up and enables the Evil WPA portal interface (wlan0wpa)
 # Author: PentestPlaybook
 # Version: 1.1
 # Category: Wireless
 
-LOG "Configuring WPA Interface..."
+LOG "Configuring Evil WPA Interface..."
 
 # Prompt for SSID
 SSID=$(TEXT_PICKER "SSID" "") || exit 0
@@ -20,7 +20,7 @@ $SSID
 EOF
 uci set wireless.wlan0wpa.ssid="$SSID_VALUE"
 
-# Prompt for WPA passphrase
+# Prompt for Evil WPA passphrase
 PSK=$(TEXT_PICKER "Passphrase" "") || exit 0
 if [[ -z "$PSK" ]]; then
     LOG "ERROR: Passphrase cannot be empty."
@@ -31,7 +31,7 @@ if [[ ${#PSK} -lt 8 ]]; then
     exit 1
 fi
 
-# Set WPA passphrase using heredoc to preserve special characters
+# Set Evil WPA passphrase using heredoc to preserve special characters
 IFS= read -r -d '' PSK_VALUE <<EOF
 $PSK
 EOF
