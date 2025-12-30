@@ -2,7 +2,7 @@
 # Name: Activate WordPress Portal
 # Description: Downloads and activates the WordPress captive portal template
 # Author: PentestPlaybook
-# Version: 1.0
+# Version: 1.1
 # Category: Evil Portal
 
 # ====================================================================
@@ -18,6 +18,18 @@ LOG "Detected Portal IP: ${PORTAL_IP}"
 REPO_URL="https://github.com/PentestPlaybook/auth-relay-framework/archive/refs/heads/main.tar.gz"
 REPO_DIR="/root/auth-relay-framework"
 PORTAL_DIR="/root/portals/Wordpress"
+
+# ====================================================================
+# STEP 0: Backwards Compatibility Check
+# ====================================================================
+LOG "Step 0: Checking for backwards compatibility..."
+
+if [ -d "/root/portals/Wordpress" ] && [ ! -d "/root/portals/Default" ]; then
+    LOG "Detected legacy installation: Wordpress exists but Default does not"
+    LOG "Renaming /root/portals/Wordpress to /root/portals/Default..."
+    mv /root/portals/Wordpress /root/portals/Default
+    LOG "SUCCESS: Legacy portal backed up to Default"
+fi
 
 # ====================================================================
 # STEP 1: Download Repository
