@@ -2,15 +2,21 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.6
+# Version: 1.7
 # Category: Evil Portal
 
 # ====================================================================
 # STEP 0: Ask About Isolated Subnet Configuration
 # ====================================================================
 DIALOG_RESULT=$(CONFIRMATION_DIALOG "Configure isolated subnet? (recommended)")
-
 if [ "$DIALOG_RESULT" = "1" ]; then
+    # Check if wlan0wpa exists and is active
+    if ! iwinfo wlan0wpa info &>/dev/null; then
+        LOG "ERROR: Evil WPA (wlan0wpa) must be enabled before configuring isolated subnet"
+        LOG "Please enable Evil WPA in the Pineapple settings and run this payload again"
+        exit 1
+    fi
+
     # YES selected - use isolated network
     PORTAL_IP="10.0.0.1"
     BRIDGE_IF="br-evil"
@@ -53,7 +59,6 @@ else
     LOG "Using main network: ${BRIDGE_IF} (${PORTAL_IP})"
     LOG ""
 fi
-
 LOG "Starting Evil Portal installation for WiFi Pineapple Pager..."
 LOG "Portal IP: ${PORTAL_IP}"
 LOG "Bridge Interface: ${BRIDGE_IF}"
@@ -656,24 +661,14 @@ enable() {
     uci set firewall.@redirect[-1].target='DNAT'
 
     uci commit firewall
-    /etc/init.d/firewall restart
 
     # Create boot symlink
     ln -sf /etc/init.d/evilportal /etc/rc.d/S99evilportal
 
-    # Start services
-    start_services
-
-    logger -t evilportal "Evil Portal enabled and started (persistent - will survive reboot)"
+    logger -t evilportal "Evil Portal enabled (will start on next reboot)"
 }
 
 disable() {
-    # Stop services first
-    stop_services
-
-    # Remove nft rules from memory
-    remove_nft_rules
-
     # Remove boot symlink
     rm -f /etc/rc.d/*evilportal
 
@@ -689,9 +684,8 @@ disable() {
     done
 
     uci commit firewall
-    /etc/init.d/firewall restart
 
-    logger -t evilportal "Evil Portal disabled and cleaned up (removed from boot)"
+    logger -t evilportal "Evil Portal disabled (will not start on next reboot)"
 }
 INITEOF
 
@@ -875,17 +869,11 @@ LOG "API files: /pineapple/ui/modules/evilportal/assets/api/"
 LOG "Init script: /etc/init.d/evilportal"
 LOG ""
 LOG "Management commands:"
-LOG "  Enable:  /etc/init.d/evilportal enable   (turn ON + persist after reboot)"
-LOG "  Disable: /etc/init.d/evilportal disable  (turn OFF + remove from boot)"
-LOG "  Start:   /etc/init.d/evilportal start    (turn ON temporarily - gone after reboot)"
-LOG "  Stop:    /etc/init.d/evilportal stop     (turn OFF temporarily  - gone after reboot)"
+LOG "  Enable:  /etc/init.d/evilportal enable   (Portal ON after reboot)"
+LOG "  Disable: /etc/init.d/evilportal disable  (Portal OFF after reboot)"
+LOG "  Start:   /etc/init.d/evilportal start    (Portal ON now)"
+LOG "  Stop:    /etc/init.d/evilportal stop     (Portal OFF now)"
 LOG "  Restart: /etc/init.d/evilportal restart  (restart portal)"
-LOG ""
-LOG "Behavior:"
-LOG "  - enable + reboot  = Portal ON (persistent)"
-LOG "  - disable + reboot = Portal OFF (persistent)"
-LOG "  - start + reboot   = Portal ON (temporary, not persistent)"
-LOG "  - stop + reboot    = Portal OFF (temporary, not persistent)"
 LOG "=================================================="
 
 exit 0
