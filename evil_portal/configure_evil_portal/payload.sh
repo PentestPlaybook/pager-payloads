@@ -2,7 +2,7 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.5
+# Version: 1.6
 # Category: Evil Portal
 
 # ====================================================================
@@ -83,6 +83,18 @@ if ! opkg list-installed | grep -q "nginx-full"; then
 fi
 
 LOG "SUCCESS: All packages installed"
+
+# Apply network changes now that packages are installed
+if [ "$BRIDGE_IF" = "br-evil" ]; then
+    LOG "Applying network changes for isolated subnet..."
+    /etc/init.d/network restart
+    sleep 10
+    wifi
+    # Verify connectivity before proceeding
+    LOG "Waiting for network connectivity..."
+    until ping -c1 downloads.openwrt.org &>/dev/null; do sleep 2; done
+    LOG "SUCCESS: Network connectivity restored"
+fi
 
 # ====================================================================
 # STEP 2: Create Evil Portal API Files
@@ -829,7 +841,7 @@ fi
 
 # Verify NAT rules exist
 LOG "Verifying NAT rules..."
-if nft list chain inet fw4 dstnat 2>/dev/null | grep -q "${PORTAL_IP}"; then
+if nft list ruleset 2>/dev/null | grep -q "dnat ip to ${PORTAL_IP}"; then
     LOG "SUCCESS: NAT rules configured"
 else
     LOG "ERROR: NAT rules not found"
