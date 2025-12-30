@@ -2,7 +2,7 @@
 # Name: Configure Evil WPA
 # Description: Sets up and enables the Evil WPA portal interface (wlan0wpa)
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Wireless
 
 LOG "Configuring Evil WPA Interface..."
@@ -26,6 +26,7 @@ if [[ -z "$PSK" ]]; then
     LOG "ERROR: Passphrase cannot be empty."
     exit 1
 fi
+
 if [[ ${#PSK} -lt 8 ]]; then
     LOG "ERROR: Passphrase must be at least 8 characters."
     exit 1
@@ -46,10 +47,12 @@ uci set wireless.wlan0wpa.disabled=0
 # Commit wireless changes for persistence
 uci commit wireless
 
-LOG "Reloading WiFi configuration..."
+LOG "Restarting WPA daemon and WiFi..."
 
-# Reload WiFi
-wifi reload
+# Restart wpad and wifi
+/etc/init.d/wpad restart
+sleep 2
+wifi
 
 # Wait for interface to become available (up to 15 seconds)
 LOG "Waiting for wlan0wpa interface..."
