@@ -2,7 +2,7 @@
 # Name: WordPress Portal
 # Description: Downloads and activates the WordPress captive portal template
 # Author: PentestPlaybook
-# Version: 1.2
+# Version: 1.3
 # Category: Evil Portal
 
 # ====================================================================
@@ -28,7 +28,35 @@ if [ -d "/root/portals/Wordpress" ] && [ ! -d "/root/portals/Default" ]; then
     LOG "Detected legacy installation: Wordpress exists but Default does not"
     LOG "Renaming /root/portals/Wordpress to /root/portals/Default..."
     mv /root/portals/Wordpress /root/portals/Default
-    LOG "SUCCESS: Legacy portal backed up to Default"
+    
+    # Create captive portal detection files for the renamed Default portal
+    cat > "/root/portals/Default/generate_204.html" << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0;url=http://${PORTAL_IP}/">
+    <script>window.location.href="http://${PORTAL_IP}/";</script>
+</head>
+<body>
+    <a href="http://${PORTAL_IP}/">Sign in to network</a>
+</body>
+</html>
+EOF
+
+    cat > "/root/portals/Default/hotspot-detect.html" << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0;url=http://${PORTAL_IP}/">
+    <script>window.location.href="http://${PORTAL_IP}/";</script>
+</head>
+<body>
+    <a href="http://${PORTAL_IP}/">Sign in to network</a>
+</body>
+</html>
+EOF
+
+    LOG "SUCCESS: Legacy portal backed up to Default with detection files"
 fi
 
 # ====================================================================
