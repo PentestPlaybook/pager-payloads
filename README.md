@@ -1,30 +1,54 @@
 # WiFi Pineapple Pager Payloads
-
 A collection of automated DuckyScript payloads for the WiFi Pineapple Pager (OpenWrt 24.10.1).
 
 ## 📋 Overview
-
 This repository contains ready-to-use payloads designed specifically for the WiFi Pineapple Pager. Each payload automates complex configurations and installations that would otherwise require extensive manual setup.
 
 ## ⚙️ Requirements
-
 - WiFi Pineapple Pager (OpenWrt 24.10.1)
 - Active internet connection (for package downloads)
 - Root access via SSH
 
 ---
+
 ## 📥 Installation
 
-### Method 1: Manual Installation (Recommended)
+### Method 1: Clone and Transfer (Recommended)
+````bash
+# Clone the Repository
+git clone https://github.com/PentestPlaybook/pager-payloads.git
 
-**General Template for Any Payload:**
+# Transfer the Repository to the Pager
+scp -r pager-payloads/evil_portal pager-payloads/pine_ap root@172.16.52.1:/root/payloads/user/
+````
+
+### Method 2: Manual Installation
 ````bash
 # Replace <category> and <payload_name> with actual values
 ssh root@172.16.52.1
-mkdir -p /root/payloads/user/
-mkdir -p /root/payloads/user/<category>
 mkdir -p /root/payloads/user/<category>/<payload_name>
 vim /root/payloads/user/<category>/<payload_name>/payload.sh
+````
+
+---
+
+## 🎯 Quick Reference
+
+### Simulate Captive Portal Authorization
+````bash
+# Get your client's private IP
+cat /tmp/dhcp.leases
+
+# Add your client's private IP to the evil portal allow list
+echo "192.168.x.x" > /tmp/EVILPORTAL_CLIENTS.txt
+
+# Restart evil portal to clear the allow list
+/etc/init.d/evilportal restart
+````
+
+### View Captured Credentials
+````bash
+cat /root/logs/credentials.json
 ````
 
 ---
@@ -120,7 +144,7 @@ Common issues and solutions
 - ✅ Use clear, descriptive variable names
 - ✅ Include comprehensive error handling
 - ✅ Add verification/testing steps
-- ✅ Use `ALERT` for status messages
+- ✅ Use `LOG` for status messages
 - ✅ Document all prerequisites
 - ✅ Test on fresh Pager installation
 - ✅ Include cleanup/uninstall steps if applicable
@@ -136,7 +160,7 @@ MIT License - See LICENSE file for details
 
 ## 🎄 Credits
 
-**Repository Maintainer:** [alobe]
+**Repository Maintainer:** [PentestPlaybook]
 
 **Payload Contributors:**
 - Evil Portal: Adapted from WiFi Pineapple Mark VII module
@@ -158,6 +182,7 @@ MIT License - See LICENSE file for details
 - [Hak5 Cloud C2](https://shop.hak5.org/products/c2)
 
 ---
+
 **Made with ❤️ for the Pineapple community**
 
-*Last Updated: December 25, 2025*
+*Last Updated: December 30, 2025*
