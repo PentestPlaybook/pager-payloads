@@ -40,7 +40,7 @@ vim /root/payloads/user/<category>/<payload_name>/payload.sh
 cat /tmp/dhcp.leases
 
 # Add your client's private IP to the evil portal allow list
-echo "192.168.x.x" > /tmp/EVILPORTAL_CLIENTS.txt
+echo "x.x.x.x" > /tmp/EVILPORTAL_CLIENTS.txt
 
 # Restart evil portal to clear the allow list
 /etc/init.d/evilportal restart
