@@ -1,5 +1,5 @@
 #!/bin/bash
-# Name: Configure Wireless Client Mode
+# Name: Wireless Client Mode
 # Description: Connect wlan0cli to an existing WiFi network
 # Author: PentestPlaybook
 # Version: 1.1
