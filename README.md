@@ -32,6 +32,29 @@ vim /root/payloads/user/<category>/<payload_name>/payload.sh
 
 ---
 
+## 🚀 Getting Started with Evil Portal
+
+### Installation Order
+The Evil Portal payloads must be run in a specific order:
+
+1. **Install Evil Portal** - Run first to install the Evil Portal service
+2. **WordPress Portal** - Activate your preferred portal theme
+
+### Available Payloads
+
+| Payload | Description |
+|---------|-------------|
+| `install_evil_portal` | Installs Evil Portal service and dependencies |
+| `enable_evil_portal` | Enables Evil Portal to start on boot |
+| `disable_evil_portal` | Disables Evil Portal from starting on boot |
+| `start_evil_portal` | Starts the Evil Portal service |
+| `stop_evil_portal` | Stops the Evil Portal service |
+| `restart_evil_portal` | Restarts the Evil Portal service |
+| `default_portal` | Activates the default captive portal theme |
+| `wordpress_portal` | Activates the WordPress login captive portal theme |
+
+---
+
 ## 🎯 Quick Reference
 
 ### Simulate Captive Portal Authorization
@@ -160,7 +183,7 @@ MIT License - See LICENSE file for details
 
 ## 🎄 Credits
 
-**Repository Maintainer:** [PentestPlaybook]
+**Repository Maintainer:** PentestPlaybook
 
 **Payload Contributors:**
 - Evil Portal: Adapted from WiFi Pineapple Mark VII module
@@ -185,4 +208,4 @@ MIT License - See LICENSE file for details
 
 **Made with ❤️ for the Pineapple community**
 
-*Last Updated: December 30, 2025*
+*Last Updated: December 31, 2025*
