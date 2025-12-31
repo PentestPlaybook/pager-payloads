@@ -2,7 +2,7 @@
 # Name: Install Evil Portal on Pager
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.7
+# Version: 1.8
 # Category: Evil Portal
 
 # ====================================================================
@@ -27,7 +27,7 @@ if [ "$DIALOG_RESULT" = "1" ]; then
     
     # Add evil network configuration with wlan0wpa as bridge port
     LOG "Creating br-evil bridge and interface..."
-    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n        list ports 'wlan0wpa'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
+    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
     
     # Add DHCP configuration for evil network
     LOG "Configuring DHCP for evil network..."
