@@ -66,28 +66,59 @@ LOG "Bridge Interface: ${BRIDGE_IF}"
 # ====================================================================
 # STEP 1: Install Required Packages
 # ====================================================================
-LOG "Step 1: Installing required packages..."
-LOG "Updating package lists..."
-opkg update
+LOG "Step 1: Checking and installing required packages..."
 
-LOG "Installing PHP 8 and modules..."
-opkg install php8 php8-fpm php8-mod-curl php8-mod-sqlite3
+# Check which packages need to be installed
+PACKAGES_NEEDED=""
 
-LOG "Installing nginx and dependencies..."
-opkg install nginx-full nginx-ssl-util zoneinfo-core
-
-LOG "Verifying package installation..."
-if ! opkg list-installed | grep -q "php8-fpm"; then
-    LOG "ERROR: PHP8-FPM installation failed"
-    exit 1
+# Check PHP packages
+if ! opkg list-installed | grep -q "^php8 "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED php8"
+fi
+if ! opkg list-installed | grep -q "^php8-fpm "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED php8-fpm"
+fi
+if ! opkg list-installed | grep -q "^php8-mod-curl "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED php8-mod-curl"
+fi
+if ! opkg list-installed | grep -q "^php8-mod-sqlite3 "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED php8-mod-sqlite3"
 fi
 
-if ! opkg list-installed | grep -q "nginx-full"; then
-    LOG "ERROR: nginx-full installation failed"
-    exit 1
+# Check nginx packages
+if ! opkg list-installed | grep -q "^nginx-full "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED nginx-full"
+fi
+if ! opkg list-installed | grep -q "^nginx-ssl-util "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED nginx-ssl-util"
+fi
+if ! opkg list-installed | grep -q "^zoneinfo-core "; then
+    PACKAGES_NEEDED="$PACKAGES_NEEDED zoneinfo-core"
 fi
 
-LOG "SUCCESS: All packages installed"
+# Install only if packages are missing
+if [ -n "$PACKAGES_NEEDED" ]; then
+    LOG "Updating package lists..."
+    opkg update
+    
+    LOG "Installing missing packages:$PACKAGES_NEEDED"
+    opkg install $PACKAGES_NEEDED
+    
+    # Verify critical packages installed successfully
+    if ! opkg list-installed | grep -q "php8-fpm"; then
+        LOG "ERROR: PHP8-FPM installation failed"
+        exit 1
+    fi
+
+    if ! opkg list-installed | grep -q "nginx-full"; then
+        LOG "ERROR: nginx-full installation failed"
+        exit 1
+    fi
+    
+    LOG "SUCCESS: All missing packages installed"
+else
+    LOG "SUCCESS: All required packages already installed (skipping installation)"
+fi
 
 # Apply network changes now that packages are installed
 if [ "$BRIDGE_IF" = "br-evil" ]; then
