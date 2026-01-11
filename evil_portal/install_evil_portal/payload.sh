@@ -2,7 +2,7 @@
 # Name: Install Evil Portal
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook
-# Version: 1.8
+# Version: 1.9
 # Category: Evil Portal
 
 # ====================================================================
@@ -62,6 +62,18 @@ fi
 LOG "Starting Evil Portal installation for WiFi Pineapple Pager..."
 LOG "Portal IP: ${PORTAL_IP}"
 LOG "Bridge Interface: ${BRIDGE_IF}"
+
+# ====================================================================
+# Check Internet Connectivity
+# ====================================================================
+LOG "Checking internet connectivity..."
+if ! ping -c1 google.com &>/dev/null; then
+    LOG "ERROR: No internet connectivity detected"
+    LOG "WiFi Client Mode not enabled. Enable WiFi Client Mode and try again."
+    LOG "If it is already enabled, 1) verify wifi client configuration and 2) confirm your Pager can ping google.com"
+    exit 1
+fi
+LOG "Internet connectivity confirmed"
 
 # ====================================================================
 # STEP 1: Install Required Packages
