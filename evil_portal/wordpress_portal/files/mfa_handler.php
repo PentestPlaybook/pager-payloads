@@ -1,6 +1,8 @@
 <?php
 // mfa_handler.php - handles OTP submission from mfa.html
-mkdir("/root/logs", 0755, true);
+if (!is_dir("/root/logs")) {
+    mkdir("/root/logs", 0755, true);
+}
 
 function getClientMac($clientIP) {
     return trim(exec("grep " . escapeshellarg($clientIP) . " /tmp/dhcp.leases | awk '{print \$2}'"));
