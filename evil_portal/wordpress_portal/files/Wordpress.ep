@@ -1,7 +1,0 @@
-{
-  "name":     "Wordpress",
-  "type":     "basic",
-  "version":  "1.0",
-  "index":    "index.php",
-  "capture":  "helper.php"
-}
