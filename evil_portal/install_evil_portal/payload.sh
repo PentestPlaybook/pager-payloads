@@ -2,7 +2,7 @@
 # Name: Install Evil Portal
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook / 0x4B
-# Version: 2.1
+# Version: 2.2
 # Category: Evil Portal
 
 # ====================================================================
@@ -814,12 +814,14 @@ while true; do
     if [ -f "$CLIENTS_FILE" ]; then
         # Read each IP from clients file
         while read -r ip; do
-            # Skip if already processed
-            if ! grep -q "^${ip}$" "$PROCESSED_FILE" 2>/dev/null; then
+            # Check actual NFT rules as source of truth
+            if ! nft list chain inet fw4 dstnat 2>/dev/null | grep -q "ip saddr $ip accept"; then
                 # Add nft rule - use dstnat chain directly (always exists)
                 nft insert rule inet fw4 dstnat ip saddr "$ip" accept
-                # Mark as processed
-                echo "$ip" >> "$PROCESSED_FILE"
+                # Only add to PROCESSED_FILE if not already there
+                if ! grep -q "^${ip}$" "$PROCESSED_FILE" 2>/dev/null; then
+                    echo "$ip" >> "$PROCESSED_FILE"
+                fi
                 logger -t evilportal "Whitelisted client: $ip"
             fi
         done < "$CLIENTS_FILE"
