@@ -63,7 +63,7 @@ During installation, you will be prompted to enable an isolated subnet. This opt
 cat /tmp/dhcp.leases
 
 # Add your client's private IP to the allow list
-echo "x.x.x.x" > /tmp/EVILPORTAL_CLIENTS.txt
+echo "x.x.x.x" >> /tmp/EVILPORTAL_CLIENTS.txt
 
 # Restart to clear the allow list
 /etc/init.d/evilportal restart
