@@ -62,12 +62,16 @@ During installation, you will be prompted to enable an isolated subnet. This opt
 # Get your client's private IP
 cat /tmp/dhcp.leases
 
-# Add your client's private IP to the allow list
+# Simulate captive portal authentication for your client's private IP
 echo "x.x.x.x" >> /tmp/EVILPORTAL_CLIENTS.txt
+
+# Verify client was added to the firewall allow list
+nft list chain inet fw4 dstnat | grep saddr
 
 # Restart to clear the allow list
 /etc/init.d/evilportal restart
 ```
+> **Note:** After successful authentication, reconnect to the access point to restore internet access.
 
 ### View Captured Credentials
 ```bash
