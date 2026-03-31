@@ -17,7 +17,8 @@ PentestPlaybook
 | `stop_evil_portal` | Stops the Evil Portal service |
 | `restart_evil_portal` | Restarts the Evil Portal service |
 | `default_portal` | Activates the default captive portal theme |
-| `wordpress_portal` | Activates the WordPress login captive portal theme |
+| `setup_wordpress_portal` | Deploys the WordPress login captive portal theme |
+| `switch_evil_portal` | Switches active captive portal at runtime |
 
 ## Requirements
 - WiFi Pineapple Pager (OpenWrt 24.10.1)
@@ -124,6 +125,7 @@ The authors and contributors are not responsible for misuse or damage caused by 
 ## Credits
 - Evil Portal originally developed by newbi3 for WiFi Pineapple Mark VII
 - Adapted for WiFi Pineapple Pager by PentestPlaybook
+- Switch payload & helper concept by 0x4B
 
 ## Resources
 - [WiFi Pineapple Docs](https://docs.hak5.org/)
