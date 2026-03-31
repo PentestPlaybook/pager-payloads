@@ -68,7 +68,7 @@ echo "x.x.x.x" >> /tmp/EVILPORTAL_CLIENTS.txt
 # Verify client was added to the firewall allow list
 nft list chain inet fw4 dstnat | grep saddr
 
-# Restart to clear the allow list
+# Restart evilportal to clear the allow list
 /etc/init.d/evilportal restart
 ```
 > **Note:** After successful authentication, reconnect to the access point to restore internet access.
