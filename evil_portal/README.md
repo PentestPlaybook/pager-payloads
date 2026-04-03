@@ -17,6 +17,7 @@ PentestPlaybook
 | `stop_evil_portal` | Stops the Evil Portal service |
 | `restart_evil_portal` | Restarts the Evil Portal service |
 | `default_portal` | Activates the default captive portal theme |
+| `set_evil_portal_inteface` | Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces |
 | `setup_wordpress_portal` | Deploys the WordPress login captive portal theme |
 | `switch_evil_portal` | Switches active captive portal at runtime |
 
