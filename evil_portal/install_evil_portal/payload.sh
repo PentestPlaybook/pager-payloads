@@ -2,75 +2,13 @@
 # Name: Install Evil Portal
 # Description: Complete Evil Portal installation for WiFi Pineapple Pager (OpenWrt 24.10.1)
 # Author: PentestPlaybook / 0x4B
-# Version: 2.2
+# Version: 2.3
 # Category: Evil Portal
 
-# ====================================================================
-# STEP 0: Ask About Isolated Subnet Configuration
-# ====================================================================
-DIALOG_RESULT=$(CONFIRMATION_DIALOG "Configure isolated subnet? (recommended)")
-if [ "$DIALOG_RESULT" = "1" ]; then
-    # Check if wlan0wpa exists and is active
-    if ! iwinfo wlan0wpa info &>/dev/null; then
-        LOG "ERROR: Evil WPA (wlan0wpa) must be enabled before configuring isolated subnet"
-        LOG "Please enable Evil WPA in the Pineapple settings and run this payload again"
-        exit 1
-    fi
+PORTAL_IP="172.16.52.1"
+BRIDGE_IF="br-lan"
+FIREWALL_SRC="lan"
 
-    # YES selected - use isolated network
-    PORTAL_IP="10.0.0.1"
-    BRIDGE_IF="br-evil"
-    
-    LOG "=============================================="
-    LOG "Configuring Isolated Evil Network..."
-    LOG "=============================================="
-    
-    # Add evil network configuration with wlan0wpa as bridge port
-    LOG "Creating br-evil bridge and interface..."
-    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
-    
-    # Add DHCP configuration for evil network
-    LOG "Configuring DHCP for evil network..."
-    echo -e "\nconfig dhcp 'evil'\n        option interface 'evil'\n        option start '100'\n        option limit '150'\n        option leasetime '1h'" >> /etc/config/dhcp
-    
-    # Assign wlan0wpa to evil network
-    LOG "Assigning wlan0wpa to evil network..."
-    uci set wireless.wlan0wpa.network='evil'
-    uci commit wireless
-    
-    # Remove wlan0wpa from br-lan bridge
-    LOG "Removing wlan0wpa from br-lan..."
-    uci del_list network.brlan.ports='wlan0wpa'
-    uci commit network
-    
-    # Add evil network to firewall with separate zone
-    LOG "Adding evil network to firewall..."
-    # Create separate zone for evil network
-    uci add firewall zone
-    uci set firewall.@zone[-1].name='evil'
-    uci set firewall.@zone[-1].network='evil'
-    uci set firewall.@zone[-1].input='ACCEPT'
-    uci set firewall.@zone[-1].output='ACCEPT'
-    uci set firewall.@zone[-1].forward='REJECT'
-    
-    # Allow evil zone to forward to wan for internet access
-    uci add firewall forwarding
-    uci set firewall.@forwarding[-1].src='evil'
-    uci set firewall.@forwarding[-1].dest='wan'
-    
-    uci commit firewall
-    
-    LOG "SUCCESS: Isolated subnet configured"
-    LOG ""
-else
-    # NO selected - use main network
-    PORTAL_IP="172.16.52.1"
-    BRIDGE_IF="br-lan"
-    
-    LOG "Skipping isolated subnet configuration..."
-    LOG "Using main network: ${BRIDGE_IF} (${PORTAL_IP})"
-    LOG ""
-fi
 LOG "Starting Evil Portal installation for WiFi Pineapple Pager..."
 LOG "Portal IP: ${PORTAL_IP}"
 LOG "Bridge Interface: ${BRIDGE_IF}"
@@ -142,18 +80,6 @@ if [ -n "$PACKAGES_NEEDED" ]; then
     LOG "SUCCESS: All missing packages installed"
 else
     LOG "SUCCESS: All required packages already installed (skipping installation)"
-fi
-
-# Apply network changes now that packages are installed
-if [ "$BRIDGE_IF" = "br-evil" ]; then
-    LOG "Applying network changes for isolated subnet..."
-    /etc/init.d/network restart
-    sleep 10
-    wifi
-    # Verify connectivity before proceeding
-    LOG "Waiting for network connectivity..."
-    until ping -c1 downloads.openwrt.org &>/dev/null; do sleep 2; done
-    LOG "SUCCESS: Network connectivity restored"
 fi
 
 # ====================================================================
@@ -569,13 +495,6 @@ LOG "SUCCESS: Permissions configured"
 # ====================================================================
 LOG "Step 6: Creating Evil Portal init script..."
 
-# Determine source zone for firewall rules based on isolated subnet choice
-if [ "$BRIDGE_IF" = "br-evil" ]; then
-    FIREWALL_SRC="evil"
-else
-    FIREWALL_SRC="lan"
-fi
-
 cat > /etc/init.d/evilportal << INITEOF
 #!/bin/sh /etc/rc.common
 
@@ -839,13 +758,6 @@ LOG "SUCCESS: Init script and daemon created"
 # ====================================================================
 LOG "Step 7: Configuring firewall NAT rules..."
 
-# Determine source zone based on isolated subnet choice
-if [ "$BRIDGE_IF" = "br-evil" ]; then
-    FIREWALL_SRC="evil"
-else
-    FIREWALL_SRC="lan"
-fi
-
 uci add firewall redirect
 uci set firewall.@redirect[-1].name='Evil Portal HTTPS'
 uci set firewall.@redirect[-1].src="${FIREWALL_SRC}"
@@ -993,6 +905,7 @@ LOG "  Start:   /etc/init.d/evilportal start    (Portal ON now)"
 LOG "  Stop:    /etc/init.d/evilportal stop     (Portal OFF now)"
 LOG "  Switch:  /etc/init.d/evilportal switch <portal-name> (Switch Active Portal)"
 LOG "  Restart: /etc/init.d/evilportal restart  (restart portal)"
+LOG "  Set Interface: run set_evil_portal_interface payload"
 LOG "=================================================="
 
 exit 0
