@@ -26,30 +26,31 @@ PentestPlaybook
 - Active internet connection (for initial package installation)
 
 ## Installation Order
-1. Run `install_evil_portal`
-2. Run `wordpress_portal` to activate the WordPress captive portal
+1. Run `install_evil_portal` to install Evil Portal service and dependencies
+2. Run `set_evil_portal_interface` to configure which interface Evil Portal applies to
+3. Run `setup_wordpress_portal` to deploy the WordPress captive portal
+4. Run `switch_evil_portal` and select `wordpress` to activate it
 
 Evil Portal is automatically enabled and started during installation.
 
 ### Triggering the Captive Portal
-After connecting to the Evil WPA network, the captive portal should appear automatically. If it doesn't:
+After connecting to the target network, the captive portal should appear automatically. If it doesn't:
 1. Go to WiFi settings and tap "Sign in to network" or "Sign In"
 2. On Android, tap the WiFi network name to see the sign-in option
 3. Open any browser and navigate to a non-HTTPS site (e.g., `http://example.com`)
-   
+
 ### Reverting to Default Portal
-To switch back to the default portal, run `default_portal` or `restart_evil_portal`.
+To switch back to the default portal, run `default_portal`.
 
-## Installation Options
+## Interface Configuration
 
-### Isolated Subnet
-During installation, you will be prompted to enable an isolated subnet. This option:
+By default, Evil Portal applies to all interfaces on the management network (172.16.52.0/24). Use `set_evil_portal_interface` to configure which interface Evil Portal applies to:
 
-- Creates a separate network (10.0.0.0/24) for the Evil WPA access point
-- Ensures the captive portal only appears when clients connect to Evil WPA
-- Prevents the portal from affecting clients on the management network (172.16.52.0/24)
+- **Evil WPA (wlan0wpa)** — Captive portal only appears on the Evil WPA network (10.0.0.0/24)
+- **Open AP (wlan0open)** — Captive portal only appears on the Open AP network (10.0.0.0/24)
+- **All interfaces (br-lan)** — Captive portal appears on all interfaces (172.16.52.0/24)
 
-**Recommended:** Enable isolated subnet if you want the portal to only capture credentials from Evil WPA clients.
+**Recommended:** Configure Evil Portal to apply to a single interface to avoid affecting clients on the management network.
 
 ## Features
 - Automatic captive portal detection for iOS and Android devices
@@ -105,7 +106,7 @@ If a newly activated portal doesn't appear on your device:
 2. Disconnect and reconnect your test device from the WiFi network
 3. Wait longer - some devices cache the previous portal and take time to refresh
 4. Try "Forget Network" on your device and reconnect fresh
-   
+
 ---
 
 ## Disclaimer
