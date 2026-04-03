@@ -11,15 +11,15 @@ PentestPlaybook
 | Payload | Description |
 |---------|-------------|
 | `install_evil_portal` | Installs Evil Portal service and dependencies |
+| `set_evil_portal_interface` | Sets the network interface Evil Portal applies to |
 | `enable_evil_portal` | Enables Evil Portal to start on boot |
 | `disable_evil_portal` | Disables Evil Portal from starting on boot |
 | `start_evil_portal` | Starts the Evil Portal service |
 | `stop_evil_portal` | Stops the Evil Portal service |
 | `restart_evil_portal` | Restarts the Evil Portal service |
-| `default_portal` | Activates the default captive portal theme |
-| `set_evil_portal_inteface` | Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces |
-| `setup_wordpress_portal` | Deploys the WordPress login captive portal theme |
 | `switch_evil_portal` | Switches active captive portal at runtime |
+| `default_portal` | Activates the default captive portal theme |
+| `setup_wordpress_portal` | Deploys the WordPress login captive portal theme |
 
 ## Requirements
 - WiFi Pineapple Pager (OpenWrt 24.10.1)
