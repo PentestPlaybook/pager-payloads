@@ -2,7 +2,7 @@
 # Name: Interface Manager
 # Description: Displays interface status and manages interface activation
 # Author: PentestPlaybook
-# Version: 1.0
+# Version: 1.1
 # Category: Evil Portal
 
 disable_interface() {
@@ -98,10 +98,24 @@ while true; do
         fi
 
         # Get Evil Portal status
-        if uci show wireless.${IFACE}.network 2>/dev/null | grep -q "evil"; then
-            EVIL_PORTAL="Yes"
+        EP_BRIDGE=$(grep -o 'iifname "[^"]*"' /etc/init.d/evilportal 2>/dev/null | head -1 | grep -o '"[^"]*"' | tr -d '"')
+        EP_RUNNING=0
+        pgrep nginx > /dev/null && EP_RUNNING=1
+
+        if [ "$EP_RUNNING" -eq 1 ]; then
+            if [ "$EP_BRIDGE" = "br-lan" ]; then
+                EVIL_PORTAL="Yes (All Interfaces)"
+            elif [ "$EP_BRIDGE" = "br-evil" ]; then
+                if uci show wireless.${IFACE}.network 2>/dev/null | grep -q "evil"; then
+                    EVIL_PORTAL="Yes (Isolated)"
+                else
+                    EVIL_PORTAL="No"
+                fi
+            else
+                EVIL_PORTAL="Not Installed"
+            fi
         else
-            EVIL_PORTAL="No"
+            EVIL_PORTAL="Not Installed"
         fi
 
         LOG "Interface: ${IFACE}"
