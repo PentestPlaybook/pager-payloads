@@ -14,21 +14,21 @@ This repository contains ready-to-use payloads designed specifically for the WiF
 ## 📥 Installation
 
 ### Method 1: Clone and Transfer (Recommended)
-````bash
+```bash
 # Clone the Repository
 git clone https://github.com/PentestPlaybook/pager-payloads.git
 
 # Transfer the Repository to the Pager
 scp -r pager-payloads/evil_portal pager-payloads/pine_ap root@172.16.52.1:/root/payloads/user/
-````
+```
 
 ### Method 2: Manual Installation
-````bash
+```bash
 # Replace <category> and <payload_name> with actual values
 ssh root@172.16.52.1
 mkdir -p /root/payloads/user/<category>/<payload_name>
 vim /root/payloads/user/<category>/<payload_name>/payload.sh
-````
+```
 
 ---
 
@@ -38,48 +38,58 @@ vim /root/payloads/user/<category>/<payload_name>/payload.sh
 The Evil Portal payloads must be run in a specific order:
 
 1. **Install Evil Portal** - Run first to install the Evil Portal service
-2. **WordPress Portal** - Activate your preferred portal theme
+2. **Set Evil Portal Interface** - Configure which interface Evil Portal applies to
+3. **Interface Manager** - Confirm interface status and resolve any connectivity issues
+4. **WordPress Portal** - Deploy the WordPress captive portal
+5. **Switch Evil Portal** - Select `wordpress` to activate it
 
 ### Available Payloads
 
 | Payload | Description |
 |---------|-------------|
 | `install_evil_portal` | Installs Evil Portal service and dependencies |
+| `set_evil_portal_interface` | Sets the network interface Evil Portal applies to |
+| `interface_manager` | Displays interface status and manages interface activation |
 | `enable_evil_portal` | Enables Evil Portal to start on boot |
 | `disable_evil_portal` | Disables Evil Portal from starting on boot |
 | `start_evil_portal` | Starts the Evil Portal service |
 | `stop_evil_portal` | Stops the Evil Portal service |
 | `restart_evil_portal` | Restarts the Evil Portal service |
+| `switch_evil_portal` | Switches active captive portal at runtime |
 | `default_portal` | Activates the default captive portal theme |
-| `wordpress_portal` | Activates the WordPress login captive portal theme |
+| `setup_wordpress_portal` | Deploys the WordPress login captive portal theme |
 
 ---
 
 ## 🎯 Quick Reference
 
 ### Simulate Captive Portal Authorization
-````bash
+```bash
 # Get your client's private IP
 cat /tmp/dhcp.leases
 
-# Add your client's private IP to the evil portal allow list
-echo "x.x.x.x" > /tmp/EVILPORTAL_CLIENTS.txt
+# Simulate captive portal authentication for your client's private IP
+echo "x.x.x.x" >> /tmp/EVILPORTAL_CLIENTS.txt
 
-# Restart evil portal to clear the allow list
+# Verify client was added to the firewall allow list
+nft list chain inet fw4 dstnat | grep saddr
+
+# Restart evilportal to clear the allow list
 /etc/init.d/evilportal restart
-````
+```
+> **Note:** After successful authentication, reconnect to the access point to restore internet access.
 
 ### View Captured Credentials
-````bash
+```bash
 cat /root/logs/credentials.json
-````
+```
 
 ---
 
 ## 🔧 General Troubleshooting
 
 ### Debugging Any Payload
-````bash
+```bash
 # Run with verbose output
 bash -x payload.sh 2>&1 | tee install.log
 
@@ -88,7 +98,7 @@ logread | tail -50
 
 # View recent errors
 logread | grep -i error | tail -20
-````
+```
 
 ### Common Issues
 - **"No space left on device"** - Free up storage or use external storage
@@ -120,9 +130,9 @@ Contributions are welcome! Help grow this collection of Pager payloads.
 
 1. **Fork the repository**
 2. **Create a new directory** for your payload following the structure:
-````
+```
    <category>/<payload_name>/
-````
+```
 3. **Include required files:**
    - `payload.sh` - Your executable script
    - `README.md` - Payload documentation (see template below)
@@ -208,4 +218,4 @@ MIT License - See LICENSE file for details
 
 **Made with ❤️ for the Pineapple community**
 
-*Last Updated: December 31, 2025*
+*Last Updated: April 3, 2026*
