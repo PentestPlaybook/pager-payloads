@@ -86,24 +86,22 @@ cat /root/logs/credentials.json
 
 ---
 
-## 🔧 General Troubleshooting
 
-### Debugging Any Payload
-```bash
-# Run with verbose output
-bash -x payload.sh 2>&1 | tee install.log
+## 🌐 Evil Portal Troubleshooting
 
-# Check system logs
-logread | tail -50
+### No internet connectivity after connecting to access point — cannot ping a domain from the connected device
+SSH into the Pager using a physical connection and verify you can ping a domain from the Pager itself. If the Pager cannot ping a domain, check the following:
+- Ensure you do not have all 3 access points enabled simultaneously
+- Verify your WiFi Client Mode configuration is correct
 
-# View recent errors
-logread | grep -i error | tail -20
-```
+### No internet connectivity after connecting to access point — can ping a domain from the connected device
+The Pager has internet but the connected client does not. This is most commonly a PineAP filter issue:
+- Verify your PineAP filters are set to **DENY**
+- If filters are set to **ALLOW**, ensure connecting device has been added to the allow list
 
-### Common Issues
-- **"No space left on device"** - Free up storage or use external storage
-- **"Package not found"** - Run `opkg update` first
-- **Network errors** - Verify internet connection is active
+### Not able to connect to an access point
+- Verify the AP you are trying to connect to is currently enabled on the Pager and not just a saved network on your device
+- Use the Interface Manager payload to confirm which interfaces are currently up
 
 ---
 
@@ -140,7 +138,7 @@ Contributions are welcome! Help grow this collection of Pager payloads.
 5. **Submit a pull request**
 
 ### Payload README Template
-````markdown
+```markdown
 # [Payload Name]
 
 ## Description
@@ -171,7 +169,7 @@ What to do after installation
 
 ## Troubleshooting
 Common issues and solutions
-````
+```
 
 ### Payload Guidelines
 - ✅ Use clear, descriptive variable names
@@ -218,4 +216,4 @@ MIT License - See LICENSE file for details
 
 **Made with ❤️ for the Pineapple community**
 
-*Last Updated: April 3, 2026*
+*Last Updated: April 4, 2026*
