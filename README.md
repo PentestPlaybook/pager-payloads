@@ -89,13 +89,13 @@ cat /root/logs/credentials.json
 
 ## 🌐 Evil Portal Troubleshooting
 
-### No internet connectivity after connecting to access point — cannot ping a domain from the connected device
-SSH into the Pager using a physical connection and verify you can ping a domain from the Pager itself. If the Pager cannot ping a domain, check the following:
-- Ensure you do not have all 3 access points enabled simultaneously
+### No internet connectivity after connecting to access point and pager cannot ping a domain.
+SSH into the Pager using a physical connection. If the Pager cannot ping a domain, check the following:
+- Ensure that all 3 access points are not enabled simultaneously
 - Verify your WiFi Client Mode configuration is correct
 
-### No internet connectivity after connecting to access point — can ping a domain from the connected device
-The Pager has internet but the connected client does not. This is most commonly a PineAP filter issue:
+### No internet connectivity after connecting to access point and pager can ping a domain.
+SSH into the Pager using a physical connection. If the Pager can ping a domain, check the following:
 - Verify your PineAP filters are set to **DENY**
 - If filters are set to **ALLOW**, ensure connecting device has been added to the allow list
 
