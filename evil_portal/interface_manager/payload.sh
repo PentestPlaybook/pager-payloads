@@ -2,7 +2,7 @@
 # Name: Interface Manager
 # Description: Displays interface status and manages interface activation
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Evil Portal
 
 disable_interface() {
@@ -48,15 +48,46 @@ disable_interface() {
             ;;
     esac
 
+    # Save any pending SSID/key changes before committing
+    PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'")
+    PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'")
+    PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'")
+    PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'")
+    PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'")
+    PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'")
+
+    # Revert all pending SSID/key changes from the buffer
+    [ -n "$PENDING_SSID_WPA" ] && uci revert wireless.wlan0wpa.ssid
+    [ -n "$PENDING_KEY_WPA" ] && uci revert wireless.wlan0wpa.key
+    [ -n "$PENDING_SSID_OPEN" ] && uci revert wireless.wlan0open.ssid
+    [ -n "$PENDING_KEY_OPEN" ] && uci revert wireless.wlan0open.key
+    [ -n "$PENDING_SSID_MGMT" ] && uci revert wireless.wlan0mgmt.ssid
+    [ -n "$PENDING_KEY_MGMT" ] && uci revert wireless.wlan0mgmt.key
+
     LOG "Disabling ${SELECTED_NAME}..."
     uci set wireless.${SELECTED_IFACE}.disabled='1'
     uci commit wireless
+
+    # Re-stage all pending SSID/key changes without committing
+    [ -n "$PENDING_SSID_WPA" ] && uci set wireless.wlan0wpa.ssid="$PENDING_SSID_WPA"
+    [ -n "$PENDING_KEY_WPA" ] && uci set wireless.wlan0wpa.key="$PENDING_KEY_WPA"
+    [ -n "$PENDING_SSID_OPEN" ] && uci set wireless.wlan0open.ssid="$PENDING_SSID_OPEN"
+    [ -n "$PENDING_KEY_OPEN" ] && uci set wireless.wlan0open.key="$PENDING_KEY_OPEN"
+    [ -n "$PENDING_SSID_MGMT" ] && uci set wireless.wlan0mgmt.ssid="$PENDING_SSID_MGMT"
+    [ -n "$PENDING_KEY_MGMT" ] && uci set wireless.wlan0mgmt.key="$PENDING_KEY_MGMT"
 
     LOG "Restarting Networking..."
     /etc/init.d/network restart
     sleep 10
     wifi
     sleep 35
+
+    # Reload wifi if any values were restaged so interfaces reflect pending changes
+    if [ -n "$PENDING_SSID_WPA" ] || [ -n "$PENDING_KEY_WPA" ] || \
+       [ -n "$PENDING_SSID_OPEN" ] || [ -n "$PENDING_KEY_OPEN" ] || \
+       [ -n "$PENDING_SSID_MGMT" ] || [ -n "$PENDING_KEY_MGMT" ]; then
+        wifi reload
+    fi
 
     LOG "Connectivity Restored"
     LOG ""
@@ -221,16 +252,72 @@ while true; do
                             ;;
                     esac
 
+                    # Save any pending SSID/key changes before committing
+                    PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'")
+                    PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'")
+                    PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'")
+                    PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'")
+                    PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'")
+                    PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'")
+
+                    # Revert all pending SSID/key changes from the buffer
+                    [ -n "$PENDING_SSID_WPA" ] && uci revert wireless.wlan0wpa.ssid
+                    [ -n "$PENDING_KEY_WPA" ] && uci revert wireless.wlan0wpa.key
+                    [ -n "$PENDING_SSID_OPEN" ] && uci revert wireless.wlan0open.ssid
+                    [ -n "$PENDING_KEY_OPEN" ] && uci revert wireless.wlan0open.key
+                    [ -n "$PENDING_SSID_MGMT" ] && uci revert wireless.wlan0mgmt.ssid
+                    [ -n "$PENDING_KEY_MGMT" ] && uci revert wireless.wlan0mgmt.key
+
                     LOG "Disabling ${SELECTED_NAME}..."
                     uci set wireless.${SELECTED_IFACE}.disabled='1'
                     uci commit wireless
+
+                    # Re-stage all pending SSID/key changes without committing
+                    [ -n "$PENDING_SSID_WPA" ] && uci set wireless.wlan0wpa.ssid="$PENDING_SSID_WPA"
+                    [ -n "$PENDING_KEY_WPA" ] && uci set wireless.wlan0wpa.key="$PENDING_KEY_WPA"
+                    [ -n "$PENDING_SSID_OPEN" ] && uci set wireless.wlan0open.ssid="$PENDING_SSID_OPEN"
+                    [ -n "$PENDING_KEY_OPEN" ] && uci set wireless.wlan0open.key="$PENDING_KEY_OPEN"
+                    [ -n "$PENDING_SSID_MGMT" ] && uci set wireless.wlan0mgmt.ssid="$PENDING_SSID_MGMT"
+                    [ -n "$PENDING_KEY_MGMT" ] && uci set wireless.wlan0mgmt.key="$PENDING_KEY_MGMT"
                 fi
+
+                # Save any pending SSID/key changes before committing
+                PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'")
+                PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'")
+                PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'")
+                PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'")
+                PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'")
+                PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'")
+
+                # Revert all pending SSID/key changes from the buffer
+                [ -n "$PENDING_SSID_WPA" ] && uci revert wireless.wlan0wpa.ssid
+                [ -n "$PENDING_KEY_WPA" ] && uci revert wireless.wlan0wpa.key
+                [ -n "$PENDING_SSID_OPEN" ] && uci revert wireless.wlan0open.ssid
+                [ -n "$PENDING_KEY_OPEN" ] && uci revert wireless.wlan0open.key
+                [ -n "$PENDING_SSID_MGMT" ] && uci revert wireless.wlan0mgmt.ssid
+                [ -n "$PENDING_KEY_MGMT" ] && uci revert wireless.wlan0mgmt.key
 
                 LOG "Enabling ${EVIL_IFACE_NAME}..."
                 uci set wireless.${EVIL_IFACE}.disabled='0'
                 uci commit wireless
+
+                # Re-stage all pending SSID/key changes without committing
+                [ -n "$PENDING_SSID_WPA" ] && uci set wireless.wlan0wpa.ssid="$PENDING_SSID_WPA"
+                [ -n "$PENDING_KEY_WPA" ] && uci set wireless.wlan0wpa.key="$PENDING_KEY_WPA"
+                [ -n "$PENDING_SSID_OPEN" ] && uci set wireless.wlan0open.ssid="$PENDING_SSID_OPEN"
+                [ -n "$PENDING_KEY_OPEN" ] && uci set wireless.wlan0open.key="$PENDING_KEY_OPEN"
+                [ -n "$PENDING_SSID_MGMT" ] && uci set wireless.wlan0mgmt.ssid="$PENDING_SSID_MGMT"
+                [ -n "$PENDING_KEY_MGMT" ] && uci set wireless.wlan0mgmt.key="$PENDING_KEY_MGMT"
+
                 wifi reload
                 sleep 35
+
+                # Reload wifi if any values were restaged so interfaces reflect pending changes
+                if [ -n "$PENDING_SSID_WPA" ] || [ -n "$PENDING_KEY_WPA" ] || \
+                   [ -n "$PENDING_SSID_OPEN" ] || [ -n "$PENDING_KEY_OPEN" ] || \
+                   [ -n "$PENDING_SSID_MGMT" ] || [ -n "$PENDING_KEY_MGMT" ]; then
+                    wifi reload
+                fi
 
                 LOG "${EVIL_IFACE_NAME} enabled"
                 LOG ""
