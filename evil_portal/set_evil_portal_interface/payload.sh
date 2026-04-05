@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces
 # Author: PentestPlaybook
-# Version: 1.0
+# Version: 1.1
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -132,6 +132,30 @@ LOG "SUCCESS: Existing NAT rules removed"
 # ====================================================================
 LOG "Step 7: Updating network configuration..."
 
+# Save any pending SSID/key changes across all interfaces before any wireless commits
+# uci changes wireless output format: "wireless.wlan0wpa.ssid='value'" - extract value after =
+PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'")
+PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'")
+PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'")
+PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'")
+PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'")
+PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'")
+
+LOG "Pending SSID WPA: ${PENDING_SSID_WPA:-none}"
+LOG "Pending KEY WPA: ${PENDING_KEY_WPA:+set}"
+LOG "Pending SSID OPEN: ${PENDING_SSID_OPEN:-none}"
+LOG "Pending KEY OPEN: ${PENDING_KEY_OPEN:+set}"
+LOG "Pending SSID MGMT: ${PENDING_SSID_MGMT:-none}"
+LOG "Pending KEY MGMT: ${PENDING_KEY_MGMT:+set}"
+
+# Revert all pending SSID/key changes from the buffer
+[ -n "$PENDING_SSID_WPA" ] && uci revert wireless.wlan0wpa.ssid
+[ -n "$PENDING_KEY_WPA" ] && uci revert wireless.wlan0wpa.key
+[ -n "$PENDING_SSID_OPEN" ] && uci revert wireless.wlan0open.ssid
+[ -n "$PENDING_KEY_OPEN" ] && uci revert wireless.wlan0open.key
+[ -n "$PENDING_SSID_MGMT" ] && uci revert wireless.wlan0mgmt.ssid
+[ -n "$PENDING_KEY_MGMT" ] && uci revert wireless.wlan0mgmt.key
+
 if [ "$TARGET_MODE" = "lan" ]; then
     # STATE: Convert back to br-lan
     LOG "Converting back to br-lan (all interfaces)..."
@@ -200,8 +224,9 @@ elif [ "$CURRENT_BRIDGE" = "br-evil" ] && [ -n "$CURRENT_IFACE" ]; then
     uci add_list network.brlan.ports="${CURRENT_IFACE}"
     uci commit network
 
-    # Remove current interface from evil network
+    # Remove current interface from evil network and assign to lan
     uci del wireless.${CURRENT_IFACE}.network
+    uci set wireless.${CURRENT_IFACE}.network='lan'
     uci commit wireless
 
     # Remove target interface from br-lan and assign to evil network
@@ -228,8 +253,9 @@ else
     uci del_list network.brlan.ports="${TARGET_IFACE}"
     uci commit network
 
-    # Assign target interface to evil network
+    # Assign target interface to evil network and explicitly assign other interface to lan
     uci set wireless.${TARGET_IFACE}.network='evil'
+    uci set wireless.${OTHER_IFACE}.network='lan'
     uci commit wireless
 
     # Create evil firewall zone and forwarding rule
@@ -348,6 +374,22 @@ if [ "$TARGET_MODE" = "isolated" ]; then
     sleep 10
 fi
 
+# Re-stage all pending SSID/key changes without committing
+# Done here to ensure they are not caught by any earlier uci commit wireless
+[ -n "$PENDING_SSID_WPA" ] && uci set wireless.wlan0wpa.ssid="$PENDING_SSID_WPA"
+[ -n "$PENDING_KEY_WPA" ] && uci set wireless.wlan0wpa.key="$PENDING_KEY_WPA"
+[ -n "$PENDING_SSID_OPEN" ] && uci set wireless.wlan0open.ssid="$PENDING_SSID_OPEN"
+[ -n "$PENDING_KEY_OPEN" ] && uci set wireless.wlan0open.key="$PENDING_KEY_OPEN"
+[ -n "$PENDING_SSID_MGMT" ] && uci set wireless.wlan0mgmt.ssid="$PENDING_SSID_MGMT"
+[ -n "$PENDING_KEY_MGMT" ] && uci set wireless.wlan0mgmt.key="$PENDING_KEY_MGMT"
+
+# Reload wifi if any values were restaged so interfaces reflect pending changes
+if [ -n "$PENDING_SSID_WPA" ] || [ -n "$PENDING_KEY_WPA" ] || \
+   [ -n "$PENDING_SSID_OPEN" ] || [ -n "$PENDING_KEY_OPEN" ] || \
+   [ -n "$PENDING_SSID_MGMT" ] || [ -n "$PENDING_KEY_MGMT" ]; then
+    wifi reload
+fi
+
 # ====================================================================
 # STEP 13: Verify
 # ====================================================================
@@ -367,6 +409,14 @@ if [ "$TARGET_MODE" = "isolated" ]; then
         LOG "SUCCESS: ${TARGET_IFACE} assigned to evil network"
     else
         LOG "ERROR: ${TARGET_IFACE} not assigned to evil network"
+        exit 1
+    fi
+
+    LOG "Verifying OTHER_IFACE network assignment..."
+    if uci show wireless.${OTHER_IFACE}.network 2>/dev/null | grep -q "lan"; then
+        LOG "SUCCESS: ${OTHER_IFACE} assigned to lan network"
+    else
+        LOG "ERROR: ${OTHER_IFACE} not assigned to lan network"
         exit 1
     fi
 
