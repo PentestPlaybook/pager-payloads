@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -162,10 +162,6 @@ if [ "$TARGET_MODE" = "lan" ]; then
 
     # Move current interface back to br-lan
     if [ -n "$CURRENT_IFACE" ]; then
-        EVIL_DEVICE_IDX=$(uci show network | grep "name='br-evil'" | sed 's/network\.\@device\[\([0-9]*\)\].*/\1/')
-        uci del_list network.@device[${EVIL_DEVICE_IDX}].ports="${CURRENT_IFACE}"
-        uci add_list network.brlan.ports="${CURRENT_IFACE}"
-        uci commit network
         uci del wireless.${CURRENT_IFACE}.network
         uci commit wireless
     fi
@@ -216,35 +212,20 @@ elif [ "$CURRENT_BRIDGE" = "br-evil" ] && [ -n "$CURRENT_IFACE" ]; then
     # STATE: br-evil exists with wrong interface - swap interfaces
     LOG "Swapping ${CURRENT_IFACE} for ${TARGET_IFACE} on br-evil..."
 
-    EVIL_DEVICE_IDX=$(uci show network | grep "name='br-evil'" | sed 's/network\.\@device\[\([0-9]*\)\].*/\1/')
-    LOG "br-evil device index: ${EVIL_DEVICE_IDX}"
-
-    # Remove current interface from br-evil and add to br-lan
-    uci del_list network.@device[${EVIL_DEVICE_IDX}].ports="${CURRENT_IFACE}"
-    uci add_list network.brlan.ports="${CURRENT_IFACE}"
-    uci commit network
-
-    # Remove current interface from evil network and assign to lan
+    # Reassign interfaces between networks via wireless network assignment only
+    # OpenWrt netifd handles bridging automatically - no port management needed
     uci del wireless.${CURRENT_IFACE}.network
     uci set wireless.${CURRENT_IFACE}.network='lan'
-    uci commit wireless
-
-    # Remove target interface from br-lan and assign to evil network
-    uci del_list network.brlan.ports="${TARGET_IFACE}"
-    uci commit network
     uci set wireless.${TARGET_IFACE}.network='evil'
     uci commit wireless
-
-    # Add target interface to br-evil
-    uci add_list network.@device[${EVIL_DEVICE_IDX}].ports="${TARGET_IFACE}"
-    uci commit network
 
 else
     # STATE: br-lan - full conversion to br-evil
     LOG "Converting from br-lan to br-evil with ${TARGET_IFACE}..."
 
     # Create br-evil bridge and evil network interface
-    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n        list ports '${TARGET_IFACE}'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
+    # Note: no list ports - OpenWrt netifd handles bridging via wireless network assignment
+    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
 
     # Configure DHCP for evil network
     echo -e "\nconfig dhcp 'evil'\n        option interface 'evil'\n        option start '100'\n        option limit '150'\n        option leasetime '1h'" >> /etc/config/dhcp
@@ -420,11 +401,11 @@ if [ "$TARGET_MODE" = "isolated" ]; then
         exit 1
     fi
 
-    LOG "Verifying br-evil ports..."
-    if cat /etc/config/network | grep -A5 "br-evil" | grep -q "ports '${TARGET_IFACE}'"; then
-        LOG "SUCCESS: ${TARGET_IFACE} is port on br-evil"
+    LOG "Verifying br-evil exists..."
+    if uci show network | grep -q "name='br-evil'"; then
+        LOG "SUCCESS: br-evil bridge exists"
     else
-        LOG "ERROR: ${TARGET_IFACE} is not a port on br-evil"
+        LOG "ERROR: br-evil bridge not found"
         exit 1
     fi
 elif [ "$TARGET_MODE" = "lan" ]; then
