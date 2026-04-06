@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces
 # Author: PentestPlaybook
-# Version: 1.2
+# Version: 1.3
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -13,7 +13,25 @@ BRIDGE_IF_LAN="br-lan"
 # ====================================================================
 # STEP 1: Select target interface
 # ====================================================================
-LOG "Select target interface:\n\n1) Evil WPA (wlan0wpa)\n2) Open AP (wlan0open)\n3) All interfaces (br-lan)\n"
+# Detect current Evil Portal interface for display
+DISPLAY_CURRENT=$(grep -o 'iifname "[^"]*"' /etc/init.d/evilportal 2>/dev/null | head -1 | grep -o '"[^"]*"' | tr -d '"')
+DISPLAY_IFACE=""
+if [ "$DISPLAY_CURRENT" = "br-evil" ]; then
+    if uci show wireless.wlan0wpa.network 2>/dev/null | grep -q "evil"; then
+        DISPLAY_IFACE="wlan0wpa"
+    elif uci show wireless.wlan0open.network 2>/dev/null | grep -q "evil"; then
+        DISPLAY_IFACE="wlan0open"
+    fi
+fi
+
+WPA_CURRENT=""
+OPEN_CURRENT=""
+LAN_CURRENT=""
+[ "$DISPLAY_IFACE" = "wlan0wpa" ] && WPA_CURRENT=" (Current)"
+[ "$DISPLAY_IFACE" = "wlan0open" ] && OPEN_CURRENT=" (Current)"
+[ "$DISPLAY_CURRENT" = "br-lan" ] && LAN_CURRENT=" (Current)"
+
+LOG "Select target interface:\n\n1) Evil WPA (wlan0wpa)${WPA_CURRENT}\n2) Open AP (wlan0open)${OPEN_CURRENT}\n3) All interfaces (br-lan)${LAN_CURRENT}\n"
 LOG "Press 'A' button to select interface."
 WAIT_FOR_BUTTON_PRESS A
 
@@ -134,12 +152,12 @@ LOG "Step 7: Updating network configuration..."
 
 # Save any pending SSID/key changes across all interfaces before any wireless commits
 # uci changes wireless output format: "wireless.wlan0wpa.ssid='value'" - extract value after =
-PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'")
-PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'")
-PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'")
-PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'")
-PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'")
-PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'")
+PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'" | tail -1)
+PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'" | tail -1)
+PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'" | tail -1)
+PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'" | tail -1)
+PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'" | tail -1)
+PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'" | tail -1)
 
 LOG "Pending SSID WPA: ${PENDING_SSID_WPA:-none}"
 LOG "Pending KEY WPA: ${PENDING_KEY_WPA:+set}"
@@ -160,8 +178,12 @@ if [ "$TARGET_MODE" = "lan" ]; then
     # STATE: Convert back to br-lan
     LOG "Converting back to br-lan (all interfaces)..."
 
-    # Move current interface back to br-lan
+    # Move current interface back to br-lan ports and remove from br-evil
     if [ -n "$CURRENT_IFACE" ]; then
+        EVIL_DEVICE_IDX=$(uci show network | grep "name='br-evil'" | sed 's/network\.\@device\[\([0-9]*\)\].*/\1/')
+        uci del_list network.@device[${EVIL_DEVICE_IDX}].ports="${CURRENT_IFACE}"
+        uci add_list network.brlan.ports="${CURRENT_IFACE}"
+        uci commit network
         uci del wireless.${CURRENT_IFACE}.network
         uci commit wireless
     fi
@@ -212,8 +234,17 @@ elif [ "$CURRENT_BRIDGE" = "br-evil" ] && [ -n "$CURRENT_IFACE" ]; then
     # STATE: br-evil exists with wrong interface - swap interfaces
     LOG "Swapping ${CURRENT_IFACE} for ${TARGET_IFACE} on br-evil..."
 
-    # Reassign interfaces between networks via wireless network assignment only
-    # OpenWrt netifd handles bridging automatically - no port management needed
+    EVIL_DEVICE_IDX=$(uci show network | grep "name='br-evil'" | sed 's/network\.\@device\[\([0-9]*\)\].*/\1/')
+    LOG "br-evil device index: ${EVIL_DEVICE_IDX}"
+
+    # Move TARGET_IFACE from br-lan to br-evil and CURRENT_IFACE back to br-lan
+    uci del_list network.brlan.ports="${TARGET_IFACE}"
+    uci del_list network.@device[${EVIL_DEVICE_IDX}].ports="${CURRENT_IFACE}"
+    uci add_list network.brlan.ports="${CURRENT_IFACE}"
+    uci add_list network.@device[${EVIL_DEVICE_IDX}].ports="${TARGET_IFACE}"
+    uci commit network
+
+    # Reassign wireless network assignments
     uci del wireless.${CURRENT_IFACE}.network
     uci set wireless.${CURRENT_IFACE}.network='lan'
     uci set wireless.${TARGET_IFACE}.network='evil'
@@ -223,15 +254,16 @@ else
     # STATE: br-lan - full conversion to br-evil
     LOG "Converting from br-lan to br-evil with ${TARGET_IFACE}..."
 
-    # Create br-evil bridge and evil network interface
-    # Note: no list ports - OpenWrt netifd handles bridging via wireless network assignment
+    # Create br-evil bridge and evil network interface (no list ports in block)
     echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
 
     # Configure DHCP for evil network
     echo -e "\nconfig dhcp 'evil'\n        option interface 'evil'\n        option start '100'\n        option limit '150'\n        option leasetime '1h'" >> /etc/config/dhcp
 
-    # Remove target interface from br-lan
+    # Remove target interface from br-lan and add to br-evil
     uci del_list network.brlan.ports="${TARGET_IFACE}"
+    EVIL_DEVICE_IDX=$(uci show network | grep "name='br-evil'" | sed 's/network\.\@device\[\([0-9]*\)\].*/\1/')
+    uci add_list network.@device[${EVIL_DEVICE_IDX}].ports="${TARGET_IFACE}"
     uci commit network
 
     # Assign target interface to evil network and explicitly assign other interface to lan
@@ -407,6 +439,14 @@ if [ "$TARGET_MODE" = "isolated" ]; then
     else
         LOG "ERROR: br-evil bridge not found"
         exit 1
+    fi
+
+    LOG "Verifying br-evil ports..."
+    if uci show network | grep "name='br-evil'" -A5 2>/dev/null || \
+       cat /etc/config/network | grep -A5 "br-evil" | grep -q "ports '${TARGET_IFACE}'"; then
+        LOG "SUCCESS: ${TARGET_IFACE} is port on br-evil"
+    else
+        LOG "WARNING: ${TARGET_IFACE} may not be a port on br-evil"
     fi
 elif [ "$TARGET_MODE" = "lan" ]; then
     LOG "Verifying br-evil is removed..."
