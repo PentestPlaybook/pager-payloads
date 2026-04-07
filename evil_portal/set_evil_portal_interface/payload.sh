@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces
 # Author: PentestPlaybook
-# Version: 1.3
+# Version: 1.4
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -385,6 +385,12 @@ if [ "$TARGET_MODE" = "isolated" ]; then
     uci commit wireless
     wifi reload
     sleep 10
+    LOG "Step 12: Restarting network to assign br-evil IP..."
+    /etc/init.d/network restart
+    sleep 10
+    LOG "Waiting for network connectivity..."
+    until ping -c1 8.8.8.8 &>/dev/null; do sleep 2; done
+    LOG "SUCCESS: Network connectivity restored"
 fi
 
 # Re-stage all pending SSID/key changes without committing
