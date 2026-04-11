@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces
 # Author: PentestPlaybook
-# Version: 1.6
+# Version: 1.7
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -504,12 +504,15 @@ elif [ "$TARGET_MODE" = "lan" ]; then
 fi
 
 LOG "Verifying internet connectivity..."
-if ping -c1 8.8.8.8 &>/dev/null; then
-    LOG "SUCCESS: Internet connectivity confirmed"
-else
-    LOG "ERROR: Internet connectivity lost"
-    exit 1
-fi
+VERIFY_TIME=$(date +%s)
+until ping -c1 8.8.8.8 &>/dev/null; do
+    sleep 2
+    if [ $(( $(date +%s) - VERIFY_TIME )) -ge 60 ]; then
+        LOG "ERROR: Internet connectivity lost"
+        exit 1
+    fi
+done
+LOG "SUCCESS: Internet connectivity confirmed"
 
 # ====================================================================
 # Complete
