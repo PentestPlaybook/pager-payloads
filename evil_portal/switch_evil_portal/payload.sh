@@ -2,21 +2,18 @@
 # Name: Switch Evil Portal
 # Description: Switches the active Evil Portal
 # Author: 0x4B / PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Wireless
 
 PORTAL_DIR="/root/portals"
 SELECTED_PORTAL=""
 
-# Non-interactive option 
+# Non-interactive option
 if [ -n "$1" ]; then
     SELECTED_PORTAL="$1"
     LOG "Requested portal: $SELECTED_PORTAL"
-
 else
-
     PORTALS=()
-
     # Build portal list (exclude 'current')
     for d in "$PORTAL_DIR"/*/; do
         name="$(basename "$d")"
@@ -29,33 +26,14 @@ else
         exit 1
     fi
 
-    # Build menu text
-    MENU="Select a portal:\n\n"
-    i=1
-    for p in "${PORTALS[@]}"; do
-        MENU="$MENU$i) $p\n"
-        i=$((i+1))
-    done
+    CURRENT_PORTAL=$(basename "$(readlink "$PORTAL_DIR/current" 2>/dev/null)" 2>/dev/null)
+    DEFAULT_PORTAL="${CURRENT_PORTAL:-${PORTALS[0]}}"
 
-    LOG "$MENU"
-    LOG "Press 'A' button to select portal."
-    WAIT_FOR_BUTTON_PRESS A
-
-    # Prompt for number
-    CHOICE=$(NUMBER_PICKER "Enter portal number" "") # removed pre-fill selection
+    SELECTED_PORTAL=$(LIST_PICKER "Select Portal" "${PORTALS[@]}" "$DEFAULT_PORTAL")
     if [ $? -ne 0 ]; then
         PROMPT "Selection cancelled"
         exit 0
     fi
-
-    INDEX=$((CHOICE -1))
-
-    if [ "$INDEX" -lt 0 ] || [ "$INDEX" -ge "${#PORTALS[@]}" ]; then
-        ERROR_DIALOG "Invalid selection"
-        exit 1
-    fi
-
-    SELECTED_PORTAL="${PORTALS[$INDEX]}"
 fi
 
 # Validate and fix permissions before switching
@@ -73,5 +51,4 @@ fi
 # Switch portal via init script
 LOG "Switching Evil Portal to: $SELECTED_PORTAL"
 /etc/init.d/evilportal switch "$SELECTED_PORTAL"
-
 ALERT "Evil Portal switched to:\n$SELECTED_PORTAL. Refresh browser if necessary."
