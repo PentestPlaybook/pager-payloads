@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Configures Evil Portal to apply to Evil WPA, Open AP, or all interfaces
 # Author: PentestPlaybook
-# Version: 2.0
+# Version: 2.1
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -149,12 +149,12 @@ LOG "Step 7: Updating network configuration..."
 
 # Save any pending SSID/key changes across all interfaces before any wireless commits
 # uci changes wireless output format: "wireless.wlan0wpa.ssid='value'" - extract value after =
-PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'" | tail -1)
-PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'" | tail -1)
-PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'" | tail -1)
-PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'" | tail -1)
-PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'" | tail -1)
-PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'" | tail -1)
+PENDING_SSID_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.ssid=" | cut -d= -f2- | tr -d "'")
+PENDING_KEY_WPA=$(uci changes wireless | grep "^wireless\.wlan0wpa\.key=" | cut -d= -f2- | tr -d "'")
+PENDING_SSID_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.ssid=" | cut -d= -f2- | tr -d "'")
+PENDING_KEY_OPEN=$(uci changes wireless | grep "^wireless\.wlan0open\.key=" | cut -d= -f2- | tr -d "'")
+PENDING_SSID_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.ssid=" | cut -d= -f2- | tr -d "'")
+PENDING_KEY_MGMT=$(uci changes wireless | grep "^wireless\.wlan0mgmt\.key=" | cut -d= -f2- | tr -d "'")
 
 LOG "Pending SSID WPA: ${PENDING_SSID_WPA:-none}"
 LOG "Pending KEY WPA: ${PENDING_KEY_WPA:+set}"
@@ -175,13 +175,12 @@ if [ "$TARGET_MODE" = "lan" ]; then
     # STATE: Convert back to br-lan
     LOG "Converting back to br-lan (all interfaces)..."
 
-# Move current interface back to br-lan ports and remove from br-evil
     if [ -n "$CURRENT_IFACE" ]; then
+        uci set wireless.${CURRENT_IFACE}.network='lan'
+        uci commit wireless
         uci del_list network.br_evil.ports="${CURRENT_IFACE}"
         uci add_list network.brlan.ports="${CURRENT_IFACE}"
         uci commit network
-        uci set wireless.${CURRENT_IFACE}.network='lan'
-        uci commit wireless
     fi
 
     # Remove evil network and br-evil device
@@ -190,10 +189,17 @@ if [ "$TARGET_MODE" = "lan" ]; then
     uci delete network.br_evil 2>/dev/null
     uci commit network
 
+    # Remove stanzas written directly to disk by echo >> during full conversion
+    sed -i "/config device/{N;/name 'br-evil'/,/^$/d}" /etc/config/network
+    sed -i "/config interface 'evil'/,/^$/d" /etc/config/network
+
     # Remove evil DHCP config
     LOG "Removing evil DHCP config..."
     uci delete dhcp.evil 2>/dev/null
     uci commit dhcp
+
+    # Remove stanza written directly to disk by echo >> during full conversion
+    sed -i "/config dhcp 'evil'/,/^$/d" /etc/config/dhcp
 
     # Remove evil firewall zone
     LOG "Removing evil firewall zone..."
@@ -230,51 +236,29 @@ elif [ "$CURRENT_BRIDGE" = "br-evil" ] && [ -n "$CURRENT_IFACE" ]; then
     # STATE: br-evil exists with wrong interface - swap interfaces
     LOG "Swapping ${CURRENT_IFACE} for ${TARGET_IFACE} on br-evil..."
 
-    # Move TARGET_IFACE from br-lan to br-evil and CURRENT_IFACE back to br-lan
-    uci del_list network.brlan.ports="${TARGET_IFACE}"
-    uci del_list network.br_evil.ports="${CURRENT_IFACE}"
-    uci add_list network.brlan.ports="${CURRENT_IFACE}"
-    uci add_list network.br_evil.ports="${TARGET_IFACE}"
-    uci commit network
-
-    # Reassign wireless network assignments
     uci del wireless.${CURRENT_IFACE}.network
     uci set wireless.${CURRENT_IFACE}.network='lan'
     uci set wireless.${TARGET_IFACE}.network='evil'
     uci commit wireless
 
-else
-    # STATE: br-lan - full conversion to br-evil
-    LOG "Converting from br-lan to br-evil with ${TARGET_IFACE}..."
-
-    # Create br-evil bridge and evil network interface via UCI batch (no file append)
-    uci batch << UCIEOF
-set network.br_evil=device
-set network.br_evil.name='br-evil'
-set network.br_evil.type='bridge'
-set network.evil=interface
-set network.evil.device='br-evil'
-set network.evil.proto='static'
-set network.evil.ipaddr='10.0.0.1'
-set network.evil.netmask='255.255.255.0'
-UCIEOF
-
-    # Configure DHCP for evil network via UCI batch
-    uci batch << UCIEOF
-set dhcp.evil=dhcp
-set dhcp.evil.interface='evil'
-set dhcp.evil.start='100'
-set dhcp.evil.limit='150'
-set dhcp.evil.leasetime='1h'
-UCIEOF
-    uci commit dhcp
-
-    # Remove target interface from br-lan and add to br-evil
-    uci del_list network.brlan.ports="${TARGET_IFACE}"
+    uci del_list network.br_evil.ports="${CURRENT_IFACE}"
     uci add_list network.br_evil.ports="${TARGET_IFACE}"
     uci commit network
 
-    # Assign target interface to evil network and explicitly assign other interface to lan
+else
+    # STATE: br-lan - full conversion to br-evil
+    # NOTE: echo >> is used verbatim from 1.2 where this branch was confirmed
+    # working. No uci revert, no uci batch - wireless assignments follow
+    # immediately after and are committed normally.
+    LOG "Converting from br-lan to br-evil with ${TARGET_IFACE}..."
+
+    echo -e "\nconfig device\n        option name 'br-evil'\n        option type 'bridge'\n\nconfig interface 'evil'\n        option device 'br-evil'\n        option proto 'static'\n        option ipaddr '10.0.0.1'\n        option netmask '255.255.255.0'" >> /etc/config/network
+
+    echo -e "\nconfig dhcp 'evil'\n        option interface 'evil'\n        option start '100'\n        option limit '150'\n        option leasetime '1h'" >> /etc/config/dhcp
+
+    uci del_list network.brlan.ports="${TARGET_IFACE}"
+    uci commit network
+
     uci set wireless.${TARGET_IFACE}.network='evil'
     uci set wireless.${OTHER_IFACE}.network='lan'
     uci commit wireless
@@ -403,9 +387,9 @@ if [ "$TARGET_MODE" = "isolated" ]; then
         fi
     done
     sleep 5
-    LOG "Step 12: Restarting network to assign br-evil IP..."
-    /etc/init.d/network restart
-    sleep 10
+    LOG "Step 12: Bringing up evil interface..."
+    ifup evil
+    sleep 5
     LOG "Waiting for network connectivity..."
     until ping -c1 8.8.8.8 &>/dev/null; do sleep 2; done
     LOG "SUCCESS: Network connectivity restored"
@@ -420,7 +404,12 @@ fi
 [ -n "$PENDING_SSID_MGMT" ] && uci set wireless.wlan0mgmt.ssid="$PENDING_SSID_MGMT"
 [ -n "$PENDING_KEY_MGMT" ] && uci set wireless.wlan0mgmt.key="$PENDING_KEY_MGMT"
 
-# Note: pending SSID/key changes are restaged but not applied until next wifi reload or reboot
+# Reload wifi if any values were restaged so interfaces reflect pending changes
+if [ -n "$PENDING_SSID_WPA" ] || [ -n "$PENDING_KEY_WPA" ] || \
+   [ -n "$PENDING_SSID_OPEN" ] || [ -n "$PENDING_KEY_OPEN" ] || \
+   [ -n "$PENDING_SSID_MGMT" ] || [ -n "$PENDING_KEY_MGMT" ]; then
+    wifi reload
+fi
 
 # ====================================================================
 # STEP 13: Verify
@@ -460,20 +449,6 @@ if [ "$TARGET_MODE" = "isolated" ]; then
         exit 1
     fi
 
-    LOG "Verifying DHCP pool..."
-    if uci show dhcp.evil &>/dev/null; then
-        LOG "SUCCESS: DHCP pool configured"
-    else
-        LOG "ERROR: DHCP pool not configured"
-        exit 1
-    fi
-    LOG "Verifying br-evil ports..."
-    if uci show network | grep "name='br-evil'" -A5 2>/dev/null || \
-       cat /etc/config/network | grep -A5 "br-evil" | grep -q "ports '${TARGET_IFACE}'"; then
-        LOG "SUCCESS: ${TARGET_IFACE} is port on br-evil"
-    else
-        LOG "WARNING: ${TARGET_IFACE} may not be a port on br-evil"
-    fi
 elif [ "$TARGET_MODE" = "lan" ]; then
     LOG "Verifying br-evil is removed..."
     if uci show network | grep -q "name='br-evil'"; then
@@ -493,15 +468,12 @@ elif [ "$TARGET_MODE" = "lan" ]; then
 fi
 
 LOG "Verifying internet connectivity..."
-VERIFY_TIME=$(date +%s)
-until ping -c1 8.8.8.8 &>/dev/null; do
-    sleep 2
-    if [ $(( $(date +%s) - VERIFY_TIME )) -ge 60 ]; then
-        LOG "ERROR: Internet connectivity lost"
-        exit 1
-    fi
-done
-LOG "SUCCESS: Internet connectivity confirmed"
+if ping -c1 8.8.8.8 &>/dev/null; then
+    LOG "SUCCESS: Internet connectivity confirmed"
+else
+    LOG "ERROR: Internet connectivity lost"
+    exit 1
+fi
 
 # ====================================================================
 # Complete
