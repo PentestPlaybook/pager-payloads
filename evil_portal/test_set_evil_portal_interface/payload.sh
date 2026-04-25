@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Cycles through all possible interface transitions with manual verification
 # Author: PentestPlaybook
-# Version: 1.0
+# Version: 1.1
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -466,6 +466,28 @@ run_transition() {
                 log "SUCCESS: Both interfaces fully up"
                 log "  ${TARGET_IFACE}: BROADCAST,MULTICAST,UP,LOWER_UP state UP"
                 log "  ${OTHER_IFACE}: BROADCAST,MULTICAST,UP,LOWER_UP state UP"
+
+                # Verify broadcasting SSIDs match pending staged values
+                if [ -n "$PENDING_SSID_WPA" ]; then
+                    BROADCASTING_WPA=$(iwinfo wlan0wpa info 2>/dev/null | grep 'ESSID' | cut -d'"' -f2)
+                    if [ "$BROADCASTING_WPA" = "$PENDING_SSID_WPA" ]; then
+                        log "SUCCESS: wlan0wpa broadcasting staged SSID: ${PENDING_SSID_WPA}"
+                    else
+                        log "ERROR: wlan0wpa broadcasting '${BROADCASTING_WPA}' but expected staged SSID '${PENDING_SSID_WPA}'"
+                        return 1
+                    fi
+                fi
+
+                if [ -n "$PENDING_SSID_OPEN" ]; then
+                    BROADCASTING_OPEN=$(iwinfo wlan0open info 2>/dev/null | grep 'ESSID' | cut -d'"' -f2)
+                    if [ "$BROADCASTING_OPEN" = "$PENDING_SSID_OPEN" ]; then
+                        log "SUCCESS: wlan0open broadcasting staged SSID: ${PENDING_SSID_OPEN}"
+                    else
+                        log "ERROR: wlan0open broadcasting '${BROADCASTING_OPEN}' but expected staged SSID '${PENDING_SSID_OPEN}'"
+                        return 1
+                    fi
+                fi
+
                 break
             fi
 
