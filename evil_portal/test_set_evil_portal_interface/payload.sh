@@ -2,7 +2,7 @@
 # Name: Set Evil Portal Interface
 # Description: Cycles through all possible interface transitions with manual verification
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -466,6 +466,15 @@ run_transition() {
                 log "SUCCESS: Both interfaces fully up"
                 log "  ${TARGET_IFACE}: BROADCAST,MULTICAST,UP,LOWER_UP state UP"
                 log "  ${OTHER_IFACE}: BROADCAST,MULTICAST,UP,LOWER_UP state UP"
+
+                # Verify TARGET_IFACE is mastered to br-evil
+                MASTER=$(ip link show "$TARGET_IFACE" 2>/dev/null | grep -o 'master [^ ]*' | cut -d' ' -f2)
+                if [ "$MASTER" = "br-evil" ]; then
+                    log "SUCCESS: ${TARGET_IFACE} mastered to br-evil"
+                else
+                    log "ERROR: ${TARGET_IFACE} mastered to '${MASTER}' instead of br-evil"
+                    return 1
+                fi
 
                 # Verify broadcasting SSIDs match pending staged values
                 if [ -n "$PENDING_SSID_WPA" ]; then
