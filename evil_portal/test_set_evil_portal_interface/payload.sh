@@ -2,7 +2,7 @@
 # Name: Test Set Evil Portal Interface
 # Description: Cycles through all possible interface transitions with manual verification
 # Author: PentestPlaybook
-# Version: 1.3
+# Version: 1.4
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -388,6 +388,11 @@ run_transition() {
        [ -n "$PENDING_SSID_OPEN" ] || [ -n "$PENDING_KEY_OPEN" ] || \
        [ -n "$PENDING_SSID_MGMT" ] || [ -n "$PENDING_KEY_MGMT" ]; then
         wifi reload
+        if [ "$TARGET_MODE" = "isolated" ]; then
+            sleep 5
+            ifup evil
+            wait_for_internet
+        fi
     fi
 
     # ====================================================================
