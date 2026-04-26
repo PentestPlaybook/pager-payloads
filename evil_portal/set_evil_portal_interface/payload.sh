@@ -21,8 +21,8 @@ wait_for_internet() {
     ELAPSED=0
     while ! ping -c1 8.8.8.8 &>/dev/null; do
         LOG "Waiting for internet connectivity... (${ELAPSED}s)"
-        sleep 5
-        ELAPSED=$((ELAPSED + 5))
+        sleep 10
+        ELAPSED=$((ELAPSED + 10))
     done
     LOG "SUCCESS: Internet connectivity confirmed"
 }
