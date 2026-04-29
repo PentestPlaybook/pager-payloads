@@ -1,8 +1,8 @@
 #!/bin/bash
-# Name: Test Set Evil Portal Interface
-# Description: Cycles through all possible interface transitions with manual verification
+# Name: Test Set Evil Portal Interface (Automated)
+# Description: Runs all 9 rounds (54 transitions) without user input, continues on failure, reports at end
 # Author: PentestPlaybook
-# Version: 1.4
+# Version: 1.5
 # Category: Evil Portal
 
 PORTAL_IP_EVIL="10.0.0.1"
@@ -12,6 +12,12 @@ BRIDGE_IF_LAN="br-lan"
 LOG_FILE="/tmp/evil_portal_transition_test.log"
 PASS=0
 FAIL=0
+FAIL_LIST=""
+
+# Staged change values
+WPA_SSID="NetA"
+WPA_KEY="Password123!"
+OPEN_SSID="OpenA"
 
 log() {
     LOG "$1"
@@ -41,6 +47,52 @@ wait_for_internet() {
         ELAPSED=$((ELAPSED + 5))
     done
     log "SUCCESS: Internet connectivity confirmed"
+}
+
+# Clear all staged SSID/key changes from the UCI buffer and reload wifi
+clear_staged_changes() {
+    log "Clearing all staged SSID/key changes..."
+    uci revert wireless.wlan0wpa.ssid  2>/dev/null
+    uci revert wireless.wlan0wpa.key   2>/dev/null
+    uci revert wireless.wlan0open.ssid 2>/dev/null
+    uci revert wireless.wlan0open.key  2>/dev/null
+    uci revert wireless.wlan0mgmt.ssid 2>/dev/null
+    uci revert wireless.wlan0mgmt.key  2>/dev/null
+    log "SUCCESS: Staged changes cleared"
+}
+
+# Stage the changes for a given round group and reload wifi
+# Group 1 (rounds 1-3): WPA only
+# Group 2 (rounds 4-6): Open only
+# Group 3 (rounds 7-9): Both
+stage_changes_for_group() {
+    local group="$1"
+
+    # Always clear first to prevent stacking
+    clear_staged_changes
+
+    case "$group" in
+        1)
+            log "Staging round group 1: WPA SSID/key only"
+            uci set wireless.wlan0wpa.ssid="$WPA_SSID"
+            uci set wireless.wlan0wpa.key="$WPA_KEY"
+            ;;
+        2)
+            log "Staging round group 2: Open SSID only"
+            uci set wireless.wlan0open.ssid="$OPEN_SSID"
+            ;;
+        3)
+            log "Staging round group 3: WPA SSID/key + Open SSID"
+            uci set wireless.wlan0wpa.ssid="$WPA_SSID"
+            uci set wireless.wlan0wpa.key="$WPA_KEY"
+            uci set wireless.wlan0open.ssid="$OPEN_SSID"
+            ;;
+    esac
+
+    log "Reloading wifi to apply staged changes..."
+    wifi reload
+    sleep 5
+    log "SUCCESS: Staged changes applied"
 }
 
 run_transition() {
@@ -472,7 +524,6 @@ run_transition() {
                 log "  ${TARGET_IFACE}: BROADCAST,MULTICAST,UP,LOWER_UP state UP"
                 log "  ${OTHER_IFACE}: BROADCAST,MULTICAST,UP,LOWER_UP state UP"
 
-                # Verify TARGET_IFACE is mastered to br-evil - retry for up to 30 seconds
                 MASTER_ELAPSED=0
                 MASTER_MAX=30
                 while [ $MASTER_ELAPSED -lt $MASTER_MAX ]; do
@@ -490,7 +541,6 @@ run_transition() {
                     fi
                 done
 
-                # Verify broadcasting SSIDs match pending staged values
                 if [ -n "$PENDING_SSID_WPA" ]; then
                     BROADCASTING_WPA=$(iwinfo wlan0wpa info 2>/dev/null | grep 'ESSID' | cut -d'"' -f2)
                     if [ "$BROADCASTING_WPA" = "$PENDING_SSID_WPA" ]; then
@@ -533,45 +583,60 @@ run_transition() {
 }
 
 # ====================================================================
-# Main test loop
+# Main - 9 rounds replicating original log runs exactly:
+#
+#   Rounds 1-3 (group 1): start br-lan,    seq 3->1->2->3->2->1->3  WPA staged only
+#   Rounds 4-6 (group 2): start wlan0wpa,  seq 1->2->3->1->3->2->1  Open staged only
+#   Rounds 7-9 (group 3): start wlan0open, seq 2->3->1->2->1->3->2  Both staged
 # ====================================================================
 > "$LOG_FILE"
 
-# Detect actual current state
-INIT_BRIDGE=$(grep -o 'iifname "[^"]*"' /etc/init.d/evilportal 2>/dev/null | head -1 | grep -o '"[^"]*"' | tr -d '"')
-if [ "$INIT_BRIDGE" = "br-evil" ]; then
-    if uci show wireless.wlan0wpa.network 2>/dev/null | grep -q "evil"; then
-        START_STATE="1"
-    else
-        START_STATE="2"
+log "=================================================="
+log "Evil Portal Interface Transition Test (Automated)"
+log "9 rounds, 54 transitions, no user input"
+log "=================================================="
+
+# Each entry: "ROUND_NUM GROUP START T1 T2 T3 T4 T5 T6"
+ROUNDS=(
+    "1 1 3 1 2 3 2 1 3"
+    "2 1 3 1 2 3 2 1 3"
+    "3 1 3 1 2 3 2 1 3"
+    "4 2 1 2 3 1 3 2 1"
+    "5 2 1 2 3 1 3 2 1"
+    "6 2 1 2 3 1 3 2 1"
+    "7 3 2 3 1 2 1 3 2"
+    "8 3 2 3 1 2 1 3 2"
+    "9 3 2 3 1 2 1 3 2"
+)
+
+CURRENT_GROUP=0
+
+for round_entry in "${ROUNDS[@]}"; do
+    ROUND_NUM=$(echo "$round_entry" | awk '{print $1}')
+    GROUP=$(echo "$round_entry"     | awk '{print $2}')
+    START=$(echo "$round_entry"     | awk '{print $3}')
+    T1=$(echo "$round_entry"        | awk '{print $4}')
+    T2=$(echo "$round_entry"        | awk '{print $5}')
+    T3=$(echo "$round_entry"        | awk '{print $6}')
+    T4=$(echo "$round_entry"        | awk '{print $7}')
+    T5=$(echo "$round_entry"        | awk '{print $8}')
+    T6=$(echo "$round_entry"        | awk '{print $9}')
+
+    # Stage changes at the start of each group (rounds 1, 4, 7)
+    # clear_staged_changes inside stage_changes_for_group prevents stacking
+    if [ "$GROUP" != "$CURRENT_GROUP" ]; then
+        CURRENT_GROUP=$GROUP
+        stage_changes_for_group "$GROUP"
     fi
-else
-    START_STATE="3"
-fi
 
-case "$START_STATE" in
-    1) STATES=("1" "2" "3" "1" "3" "2" "1") ;;
-    2) STATES=("2" "3" "1" "2" "1" "3" "2") ;;
-    3) STATES=("3" "1" "2" "3" "2" "1" "3") ;;
-esac
+    log "========== ROUND ${ROUND_NUM} =========="
+    log "Detected starting state: $(state_name $START)"
+    log "Sequence: $START $T1 $T2 $T3 $T4 $T5 $T6"
 
-log "=================================================="
-log "Evil Portal Interface Transition Test"
-log "Detected starting state: $(state_name $START_STATE)"
-log "Sequence: ${STATES[*]}"
-log "=================================================="
-
-ROUND=0
-while true; do
-    ROUND=$((ROUND + 1))
-    log "========== ROUND ${ROUND} =========="
-
-    for i in $(seq 1 $((${#STATES[@]} - 1))); do
-        FROM="${STATES[$((i-1))]}"
-        TO="${STATES[$i]}"
-        FROM_NAME="$(state_name $FROM)"
-        TO_NAME="$(state_name $TO)"
-        LABEL="${FROM_NAME} -> ${TO_NAME}"
+    PREV=$START
+    for TO in $T1 $T2 $T3 $T4 $T5 $T6; do
+        FROM_NAME="$(state_name $PREV)"
+        LABEL="${FROM_NAME} -> $(state_name $TO)"
 
         run_transition "$TO" "$FROM_NAME"
         EXIT_CODE=$?
@@ -579,19 +644,31 @@ while true; do
         if [ $EXIT_CODE -ne 0 ]; then
             FAIL=$((FAIL + 1))
             log "FAIL: ${LABEL}"
-            ALERT "FAIL: ${LABEL}\nCheck log: ${LOG_FILE}"
-            WAIT_FOR_BUTTON_PRESS A
-            log "STOPPING: failure detected on round ${ROUND}"
-            log "PASSED: ${PASS}"
-            log "FAILED: ${FAIL}"
-            exit 1
+            FAIL_LIST="${FAIL_LIST}  Round ${ROUND_NUM}: ${LABEL}\n"
+        else
+            PASS=$((PASS + 1))
+            log "PASS: ${LABEL}"
         fi
 
-        PASS=$((PASS + 1))
-        log "PASS: ${LABEL}"
-        ALERT "${LABEL} Complete\n\nPlease verify manually, then press A to proceed."
-        WAIT_FOR_BUTTON_PRESS A
+        PREV=$TO
     done
 
-    log "========== ROUND ${ROUND} COMPLETE — PASSED: ${PASS} =========="
+    log "========== ROUND ${ROUND_NUM} COMPLETE — PASSED: ${PASS} =========="
 done
+
+# ====================================================================
+# Final report
+# ====================================================================
+log "=================================================="
+log "Test Run Complete"
+log "TOTAL PASSED: ${PASS} / 54"
+log "TOTAL FAILED: ${FAIL} / 54"
+if [ -n "$FAIL_LIST" ]; then
+    log "Failed transitions:"
+    printf "%b" "$FAIL_LIST" | while IFS= read -r line; do
+        [ -n "$line" ] && log "  $line"
+    done
+fi
+log "=================================================="
+
+exit $FAIL
