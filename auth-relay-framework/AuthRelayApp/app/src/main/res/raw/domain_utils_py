@@ -1,0 +1,90 @@
+# domain_utils.py
+# Domain validation and config-file writing.
+
+import os
+
+DEFAULT_PHP_PATH = '/tmp/target_domain.php'
+DEFAULT_ENV_PATH = '/tmp/target_domain.env'
+
+
+def validate_domain(domain: str) -> dict:
+    """
+    Validate and normalize a domain URL.
+
+    Args:
+        domain: Raw domain string (e.g. 'example.com' or 'https://example.com/')
+
+    Returns:
+        dict with keys:
+            - success (bool)
+            - value (str | None): normalized domain if successful
+            - error (str | None): error message if unsuccessful
+    """
+    if not domain or not isinstance(domain, str):
+        return {"success": False, "value": None, "error": "Domain must be a non-empty string"}
+
+    domain = domain.strip()
+
+    if not domain.startswith(('http://', 'https://')):
+        domain = 'https://' + domain
+
+    domain = domain.rstrip('/')
+
+    return {"success": True, "value": domain, "error": None}
+
+
+def write_domain_config(
+    domain: str,
+    php_path: str = DEFAULT_PHP_PATH,
+    env_path: str = DEFAULT_ENV_PATH,
+) -> dict:
+    """
+    Write domain configuration files for PHP and environment variable consumption.
+
+    Args:
+        domain:   Normalized domain string (e.g. 'https://example.com')
+        php_path: Destination path for the PHP config file
+        env_path: Destination path for the .env config file
+
+    Returns:
+        dict with keys:
+            - success (bool)
+            - files_written (list[str]): paths successfully written
+            - error (str | None): error message if unsuccessful
+    """
+    if not domain or not isinstance(domain, str):
+        return {"success": False, "files_written": [], "error": "Domain must be a non-empty string"}
+
+    php_content = f'<?php\n$target_domain = "{domain}";\n?>'
+    env_content = f'TARGET_DOMAIN={domain}\n'
+    files_written = []
+
+    try:
+        for path, content in ((php_path, php_content), (env_path, env_content)):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                f.write(content)
+            files_written.append(path)
+
+        return {"success": True, "files_written": files_written, "error": None}
+
+    except OSError as e:
+        return {
+            "success": False,
+            "files_written": files_written,
+            "error": f"Could not write domain config: {e}",
+        }
+
+
+if __name__ == "__main__":
+    tests = ["example.com", "https://example.com/", "", None, "  http://example.com/  "]
+    for t in tests:
+        print(f"Input: {t!r:30} -> {validate_domain(t)}")
+
+    result = write_domain_config("https://example.com")
+    if result["success"]:
+        for path in result["files_written"]:
+            print(f"📝 Wrote domain config to {path}")
+    else:
+        print(f"⚠  Warning: {result['error']}")
+        print("📋 Manual setup required - update helper.php with your domain")

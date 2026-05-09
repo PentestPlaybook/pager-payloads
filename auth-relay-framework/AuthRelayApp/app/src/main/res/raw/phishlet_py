@@ -1,0 +1,43 @@
+# phishlet.py
+# Target-specific configuration. This is the ONLY file that needs to change
+# when targeting a different endpoint. All other components read from here.
+
+# ---------------------------------------------------------------------------
+# Login page
+# ---------------------------------------------------------------------------
+
+LOGIN_PATH              = "/wp-login.php"       # Path to the login page
+USERNAME_FIELD          = "log"                 # name attribute of the username input
+PASSWORD_FIELD          = "pwd"                 # name attribute of the password input
+SUBMIT_BUTTON           = "wp-submit"           # name attribute of the submit button
+
+# ---------------------------------------------------------------------------
+# Login outcome detection
+# ---------------------------------------------------------------------------
+
+SUCCESS_URL_INDICATOR   = "wp-admin"            # String present in URL on successful login
+LOGIN_ERROR_TEXT        = "incorrect username or password"  # Error text on failed login
+LOGIN_PAGE_SUFFIX       = "wp-login.php"        # URL suffix indicating still on login page
+
+# ---------------------------------------------------------------------------
+# MFA detection
+# ---------------------------------------------------------------------------
+
+MFA_INDICATORS          = [                     # Page source strings indicating MFA is required
+    "mo2f-digit-",
+    "verification",
+    "two-factor",
+    "authenticator",
+]
+
+# ---------------------------------------------------------------------------
+# MFA interaction
+# ---------------------------------------------------------------------------
+
+MFA_INPUT_ID_PATTERN    = "mo2f-digit-{i}"     # ID pattern for OTP digit inputs ({i} is replaced with index)
+MFA_INPUT_COUNT         = 6                     # Number of OTP digit inputs
+MFA_OTP_LENGTH          = 6                     # Expected OTP length
+MFA_VALIDATE_BUTTON_ID  = "mo2f_catchy_validate"        # ID of the validate button
+MFA_VALIDATE_BUTTON_JQUERY = "#mo2f_catchy_validate"    # jQuery selector for validate button fallback
+MFA_FAILURE_TEXT        = "attempts left"       # Body text indicating failed MFA attempt
+MFA_SUCCESS_URL_INDICATOR = "wp-admin"          # String present in URL on successful MFA

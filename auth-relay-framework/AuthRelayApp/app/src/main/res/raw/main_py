@@ -1,0 +1,101 @@
+# main.py
+# CLI entry point. Parses arguments, validates domain, launches the login server.
+
+import argparse
+import sys
+
+from domain_utils import validate_domain
+from server import perform_login, DEFAULT_PORT
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Construct and return the CLI argument parser."""
+    parser = argparse.ArgumentParser(
+        description='Login Automation with MFA Support',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f'''
+Examples:
+  python3 %(prog)s --domain https://example.com
+  python3 %(prog)s -d example.com --port 9000
+  python3 %(prog)s --domain https://my-site.org --port 8080 --headless
+        '''
+    )
+    parser.add_argument(
+        '-d', '--domain',
+        required=True,
+        help='Target domain (e.g., https://example.com or example.com)'
+    )
+    parser.add_argument(
+        '-p', '--port',
+        type=int,
+        default=DEFAULT_PORT,
+        help=f'Port for the automation server (default: {DEFAULT_PORT})'
+    )
+    parser.add_argument(
+        '--headless',
+        action='store_true',
+        help='Run browser in headless mode (no GUI)'
+    )
+    return parser
+
+
+def _parse_and_validate_args(parser: argparse.ArgumentParser) -> dict:
+    """
+    Parse CLI arguments and validate inputs.
+
+    Returns:
+        dict with keys:
+            - success (bool)
+            - domain (str | None): normalized domain if valid
+            - port (int | None)
+            - headless (bool)
+            - error (str | None)
+    """
+    args = parser.parse_args()
+
+    domain_result = validate_domain(args.domain)
+    if not domain_result["success"]:
+        return {
+            "success": False,
+            "domain": None,
+            "port": None,
+            "headless": False,
+            "error": domain_result["error"],
+        }
+
+    return {
+        "success": True,
+        "domain": domain_result["value"],
+        "port": args.port,
+        "headless": args.headless,
+        "error": None,
+    }
+
+
+def main() -> None:
+    """Entry point: parse args, validate inputs, and launch the login flow."""
+    parser = _build_arg_parser()
+    parsed = _parse_and_validate_args(parser)
+
+    if not parsed["success"]:
+        print(f"❌ Error: {parsed['error']}")
+        sys.exit(1)
+
+    domain = parsed["domain"]
+
+    print(f"🎯 Target domain: {domain}")
+    print(f"🌐 Server port:   {parsed['port']}")
+    if parsed["headless"]:
+        print("🤖 Running in headless mode")
+
+    try:
+        perform_login(domain, parsed["port"], parsed["headless"])
+    except KeyboardInterrupt:
+        print("\n👋 Exiting...")
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

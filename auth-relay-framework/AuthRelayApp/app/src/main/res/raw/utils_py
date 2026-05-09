@@ -1,0 +1,21 @@
+# utils.py
+# Shared low-level helpers used across multiple modules.
+
+from selenium.webdriver.common.by import By
+from phishlet import LOGIN_PATH, MFA_INPUT_ID_PATTERN, MFA_INPUT_COUNT
+
+
+def find_digit_inputs(driver) -> list:
+    """
+    Locate all OTP digit input elements as defined in the phishlet.
+
+    Returns:
+        List of found WebElement objects (may be fewer than MFA_INPUT_COUNT if page is not ready).
+    """
+    inputs = []
+    for i in range(1, MFA_INPUT_COUNT + 1):
+        try:
+            inputs.append(driver.find_element(By.ID, MFA_INPUT_ID_PATTERN.format(i=i)))
+        except Exception:
+            pass
+    return inputs

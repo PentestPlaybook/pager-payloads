@@ -1,0 +1,77 @@
+# result_notifier.py
+# Sends login and MFA outcome signals to the Pineapple proxy endpoints.
+
+import urllib.parse
+import urllib.request
+import urllib.error
+
+DEFAULT_URLS = {
+    "login": "http://localhost:9998/login_result",
+    "mfa":   "http://localhost:9998/mfa_result",
+}
+
+
+def send_result(
+    result: str,
+    endpoint: str,
+    timeout: int = 10,
+    retries: int = 1,
+) -> dict:
+    """
+    Send a status string to a proxy endpoint, retrying on failure.
+
+    Args:
+        result:   Status string (e.g. 'success', 'mfa_failed')
+        endpoint: Full URL of the target endpoint
+        timeout:  Request timeout in seconds
+        retries:  Number of additional attempts on failure
+
+    Returns:
+        dict with keys:
+            - success (bool)
+            - status_code (int | None): HTTP status code if a response was received
+            - attempts (int): total number of attempts made
+            - error (str | None): last error message if all attempts failed
+    """
+    if not result or not isinstance(result, str):
+        return {"success": False, "status_code": None, "attempts": 0, "error": "Result must be a non-empty string"}
+
+    url = f"{endpoint}?{urllib.parse.urlencode({'status': result})}"
+    last_error = None
+
+    for attempt in range(1, retries + 2):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as response:
+                return {
+                    "success": True,
+                    "status_code": response.status,
+                    "attempts": attempt,
+                    "error": None,
+                }
+        except urllib.error.HTTPError as e:
+            last_error = f"HTTP error: {e.code} {e.reason}"
+        except urllib.error.URLError as e:
+            last_error = f"Connection failed: {e.reason}"
+        except TimeoutError:
+            last_error = f"Request timed out after {timeout}s"
+
+    return {"success": False, "status_code": None, "attempts": retries + 1, "error": last_error}
+
+
+def send_login_result(result: str, **kwargs) -> dict:
+    """Send a login outcome to the Pineapple login endpoint."""
+    return send_result(result, DEFAULT_URLS["login"], **kwargs)
+
+
+def send_mfa_result(result: str, **kwargs) -> dict:
+    """Send an MFA outcome to the Pineapple MFA endpoint."""
+    return send_result(result, DEFAULT_URLS["mfa"], **kwargs)
+
+
+if __name__ == "__main__":
+    for label, fn in (("login", send_login_result), ("mfa", send_mfa_result)):
+        r = fn("success", retries=1)
+        if r["success"]:
+            print(f"✅ Sent {label} result - HTTP {r['status_code']} (attempt {r['attempts']})")
+        else:
+            print(f"❌ Failed to send {label} result after {r['attempts']} attempt(s): {r['error']}")

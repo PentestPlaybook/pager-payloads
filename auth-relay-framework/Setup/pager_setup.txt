@@ -1,0 +1,34 @@
+On Pager UI:
+------------------------------------
+
+* Set Pine AP filters to DENY
+
+* Configure and Enable Wireless Client Mode
+
+* Configure and Enable the Management AP
+
+* Configure and Enable the Evil WPA AP
+
+* Reboot the Pager
+
+
+
+
+Run on Pager SSH Session:
+------------------------------------
+
+wget -qO- "https://api.github.com/repos/PentestPlaybook/pager-payloads/git/trees/main?recursive=1" | tr ',' '\n' | grep '"path":"evil_portal/' | grep -v '"type":"tree"' | sed 's/.*"path":"\([^"]*\)".*/\1/' | while read f; do mkdir -p "/root/payloads/user/$(dirname $f)" && wget -q -O "/root/payloads/user/$f" "https://raw.githubusercontent.com/PentestPlaybook/pager-payloads/refs/heads/main/$f"; done
+
+
+
+
+Run these Payloads:
+------------------------------------
+
+install_evil_portal/payload.sh
+
+setup_wordpress_portal/payload.sh
+
+switch_evil_portal/payload.sh
+
+set_evil_portal_interface/payload.sh

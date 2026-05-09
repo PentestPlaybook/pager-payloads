@@ -1,0 +1,54 @@
+Run in Termux:
+------------------------------------
+
+pkg update
+
+pkg upgrade
+
+pkg install openssh
+
+passwd
+
+sshd
+
+whoami
+
+
+
+
+Run in PowerShell:
+------------------------------------
+
+cd C:\Users\youruser\Downloads\platform-tools-latest-windows\platform-tools
+
+.\adb devices
+
+.\adb forward tcp:9022 tcp:8022
+
+ssh -p 9022 u0_a###@localhost
+
+
+
+
+Run in Termux SSH Session:
+------------------------------------
+
+pkg install vim && pkg install wget && pkg install libandroid-support && pkg install libandroid-support && pkg install libandroid-support && pkg install libandroid-support && pkg install libandroid-posix-semaphore && pkg install x11-repo && pkg install termux-x11-nightly && pkg install geckodriver && pkg install sshpass && pip install selenium --break-system-packages
+
+su
+
+TERMUX_UID=$(grep '^com.termux ' /data/system/packages.list | awk '{print $2}')
+
+chcon u:object_r:shell_exec:s0 /data/data/com.termux/files/usr/lib/libandroid-support.so && chcon u:object_r:shell_exec:s0 /data/data/com.termux/files/usr/lib/libandroid-posix-semaphore.so && chmod 644 /data/data/com.termux/files/usr/lib/*.so* && chmod 755 /data/data/com.termux/files/usr/bin/* && chmod 755 /data/data/com.termux && chmod 755 /data/data/com.termux/files && chmod 755 /data/data/com.termux/files/home && chmod 755 /data/data/com.termux/files/usr && chmod 755 /data/data/com.termux/files/usr/bin && chmod 755 /data/data/com.termux/files/usr/lib && chown -R "$TERMUX_UID:$TERMUX_UID" /data/data/com.termux/files/home && chmod 755 /data/data/com.termux/files/usr/lib/apt/methods/https && chcon u:object_r:shell_exec:s0 /data/data/com.termux/files/usr/bin/bash
+
+
+
+
+Backup Termux Environment (Optional):
+------------------------------------
+
+cd C:\Users\youruser\Downloads\platform-tools-latest-windows\platform-tools
+
+.\adb backup -f termux-backup.adb com.termux
+
+dir termux-backup.adb
