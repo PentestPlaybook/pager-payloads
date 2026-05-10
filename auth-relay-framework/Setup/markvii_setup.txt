@@ -34,12 +34,15 @@ root@mk7:~# echo -e "\nconfig device\n        option name 'br-evil'\n        opt
 
 root@mk7:~# echo -e "\nconfig dhcp 'evil'\n        option interface 'evil'\n        option start '100'\n        option limit '150'\n        option leasetime '1h'" >> /etc/config/dhcp
 
+-------------------------------------------------------------------------------------------------------------
+3. Assign Evil WPA interface to the br-evil bridge:
+
 root@mk7:~# sed -i '49s/lan/evil/' /etc/config/wireless
 
 root@mk7:~# reboot
 
 -------------------------------------------------------------------------------------------------------------
-3. Install the "Evil Portal" Module:
+4. Install the "Evil Portal" Module:
 
 a) Connect to the Internet
     i.) Ethernet Connection: Connect ethernet cable to the wifi pineapple (using a USB adapter). Confirm under "Settings -> Networking -> Ethernet" that you have obtained an IP address from DHCP.
@@ -70,7 +73,7 @@ l) Wait for the "Welcome to Evil Portal ... Install Dependencies" screen. (If yo
 m) Click "Install Dependencies" and wait until the dependencies finish installation. (If you have a weak internet connection, open a new tab to confirm if the process finished.)
 
 -------------------------------------------------------------------------------------------------------------
-4. Configure Evil Portal files and routing:
+5. Configure Evil Portal files and routing:
 
 root@mk7:~# sed -i "s/172\.16\.42\.1/10.0.0.1/g" /pineapple/modules/evilportal/module.py
 
@@ -83,7 +86,7 @@ root@mk7:~# sed -i 's/br-lan/br-evil/g' /etc/init.d/evilportal
 root@mk7:~# sed -i 's/br-lan/br-evil/g' /pineapple/ui/modules/evilportal/assets/evilportal.sh
 
 -------------------------------------------------------------------------------------------------------------
-5. Create a New Captive Portal:
+6. Create a New Captive Portal:
 
 a) Next to "Portal Library" click: "New Portal".
 
@@ -94,7 +97,7 @@ c) For "Portal Name", enter "Wordpress" and click "Done".
 (Note: You do not need to click "Activate". The captive portal will be activated later, during the setup process.) 
 
 -------------------------------------------------------------------------------------------------------------
-6. Delete the default EvilPortal configuration files:
+7. Delete the default EvilPortal configuration files:
 
 a) Confirm the Default Files were created
 
@@ -110,7 +113,7 @@ c) Confirm the Default Files were deleted
 root@mk7:~# ls /root/portals/Wordpress/
 
 -------------------------------------------------------------------------------------------------------------
-7. Download the web-root files from the GitHub repository:
+8. Download the web-root files from the GitHub repository:
 
 PS C:\Users\user\> wsl -d kali-linux
 ┏━(Message from Kali developers)
@@ -133,7 +136,7 @@ Receiving objects: 100% (643/643), 349.08 KiB | 1.24 MiB/s, done.
 Resolving deltas: 100% (305/305), done.
 
 -------------------------------------------------------------------------------------------------------------
-8. Ensure the Web Root files aren't corrupted (0 bytes):
+9. Ensure the Web Root files aren't corrupted (0 bytes):
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user]
 └─$ ls -lah pager-payloads/wordpress_web_root/
@@ -154,7 +157,7 @@ drwxrwxrwx 1 kali kali  512 May  9 17:45 ..
 -rwxrwxrwx 1 kali kali  129 May  9 17:45 Wordpress.ep
 
 -------------------------------------------------------------------------------------------------------------
-9. Transfer the Web Root files to the EvilPortal source directory:
+10. Transfer the Web Root files to the EvilPortal source directory:
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user/]
 └─$ scp ./pager-payloads/wordpress_web_root/* root@172.16.42.1:/root/portals/Wordpress/
@@ -173,7 +176,7 @@ success.html                           100%  866   350.9KB/s   00:00
 Wordpress.ep                           100%  129    62.4KB/s   00:00
 
 -------------------------------------------------------------------------------------------------------------
-10. Download the Wordpress Static Format Files:
+11. Download the Wordpress Static Format Files:
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user/]
 └─$ mkdir wordpress
@@ -212,7 +215,7 @@ Wordpress.ep                           100%  129    62.4KB/s   00:00
 └─$ sed -i 's/w-logo-gray\.png/w-logo-blue.png/g; s/wordpress-logo-gray\.svg/wordpress-logo.svg/g' wp-login.css
 
 -------------------------------------------------------------------------------------------------------------
-11. Ensure the static format files are not corrupted (0 bytes):
+12. Ensure the static format files are not corrupted (0 bytes):
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user/wordpress]
 └─$ ls -lahR wp-login.css wp-scripts.js images/ wp-includes/
@@ -241,7 +244,7 @@ drwxrwxrwx 1 kali kali 512 Oct 12 11:46 ..
 -rwxrwxrwx 1 kali kali 26K Oct 12 11:46 dashicons.woff2
 
 -------------------------------------------------------------------------------------------------------------
-12. Transfer the Wordpress Static Format Files to the EvilPortal source directory:
+13. Transfer the Wordpress Static Format Files to the EvilPortal source directory:
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user/wordpress]
 └─$ scp -r wp-login.css wp-scripts.js images/ wp-includes/ root@172.16.42.1:/root/portals/Wordpress/
@@ -255,7 +258,7 @@ dashicons.ttf                          100%   55KB   1.6MB/s   00:00
 dashicons.woff2                        100%   26KB   1.3MB/s   00:00
 
 -------------------------------------------------------------------------------------------------------------
-13. Confirm all necessary files have been Transferred EvilPortal source directory:
+14. Confirm all necessary files have been Transferred EvilPortal source directory:
 
 Back in SSH Shell:
 
@@ -287,7 +290,7 @@ root@mk7:~# find /root/portals/Wordpress/ | sed 's|[^/]*/|  |g'
         success.html
 
 -------------------------------------------------------------------------------------------------------------
-14. Deploy Portal and Confirm Activation:
+15. Deploy Portal and Confirm Activation:
 
 a) Create symbolic links for the Evil Portal web root files
 
@@ -324,12 +327,12 @@ b) Refresh the EvilPortal module page to confirm the portal is now activated
 (Note: You won't be able to preview the portal until the web server is started.)
 
 -------------------------------------------------------------------------------------------------------------
-15. Back Up the Current Nginx Config:
+16. Back Up the Current Nginx Config:
 
 root@mk7:~# cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
 
 -------------------------------------------------------------------------------------------------------------
-16. Add location blocks inside the server block of the Nginx configuration file:
+17. Add location blocks inside the server block of the Nginx configuration file:
 
 root@mk7:~# vim /etc/nginx/nginx.conf
 
@@ -370,7 +373,7 @@ root@mk7:~# cat /etc/nginx/nginx.conf
 ```
 
 -------------------------------------------------------------------------------------------------------------
-17. Test Nginx Configuration and Reboot Pineapple:
+18. Test Nginx Configuration and Reboot Pineapple:
 
 a) Test NGINX Configuration
 
@@ -385,7 +388,7 @@ root@mk7:~# reboot
 (This will reload nginx and start the web server)
 
 -------------------------------------------------------------------------------------------------------------
-18. Confirm the Web Portal is started and Preview the Portal:
+19. Confirm the Web Portal is started and Preview the Portal:
 
 a) Return to the Evil Portal module page (http://172.16.42.1:1471/#/Modules/evilportal)
 
@@ -398,7 +401,7 @@ Troubleshooting:
 - If the page preview displays incorrectly, verify that the WordPress core static assets (CSS/JS files) are present and uncorrupted.
 
 -------------------------------------------------------------------------------------------------------------
-19. Starting and Enabling the Evil Portal at Boot:
+20. Starting and Enabling the Evil Portal at Boot:
 
 a) Click "Start"
 (This will create the "Allowed Clients" list (/tmp/EVILPORTAL_CLIENTS.txt) and deny internet access to clients unless they successfully log in to the captive portal).
