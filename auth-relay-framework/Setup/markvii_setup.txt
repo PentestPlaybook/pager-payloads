@@ -123,104 +123,41 @@ PS C:\Users\user\> wsl -d kali-linux
 
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user/]
-└─$ git clone https://github.com/PentestPlaybook/auth-relay-framework.git
-
-┌──(kali㉿computername)-[/mnt/c/Users/user]
-└─$ tree auth-relay-framework
-auth-relay-framework
-├── README.md
-└── wordpress
-    ├── captive-portal
-    │   ├── execution
-    │   │   ├── wordpress_relay_execution.txt
-    │   │   └── wordpress-relay.py
-    │   ├── legacy
-    │   │   └── vmware
-    │   │       ├── selenium-setup.txt
-    │   │       ├── wordpress-relay.py
-    │   │       └── wordpress-relay.txt
-    │   ├── objectives.txt
-    │   └── setup
-    │       ├── android
-    │       │   ├── termux_setup.txt
-    │       │   ├── WordpressRelayApp
-    │       │   │   ├── app
-    │       │   │   │   ├── build.gradle
-    │       │   │   │   └── src
-    │       │   │   │       └── main
-    │       │   │   │           ├── AndroidManifest.xml
-    │       │   │   │           ├── java
-    │       │   │   │           │   └── com
-    │       │   │   │           │       └── example
-    │       │   │   │           │           └── wordpressrelayapp
-    │       │   │   │           │               └── MainActivity.kt
-    │       │   │   │           └── res
-    │       │   │   │               ├── layout
-    │       │   │   │               │   └── activity_main.xml
-    │       │   │   │               └── values
-    │       │   │   │                   ├── colors.xml
-    │       │   │   │                   ├── strings.xml
-    │       │   │   │                   └── themes.xml
-    │       │   │   ├── build.gradle
-    │       │   │   ├── gradle.properties
-    │       │   │   └── settings.gradle
-    │       │   └── WordpressRelayApp_setup.txt
-    │       ├── droplet
-    │       │   └── wordpress-droplet-setup.txt
-    │       └── pineapple
-    │           ├── evilportal-setup.txt
-    │           └── web-root
-    │               ├── helper.php
-    │               ├── index.php
-    │               ├── login_error.html
-    │               ├── login.html
-    │               ├── login_result.php
-    │               ├── mfa_failed.html
-    │               ├── mfa_handler.php
-    │               ├── mfa.html
-    │               ├── mfa_result.php
-    │               ├── mfa_status.php
-    │               ├── success.html
-    │               └── Wordpress.ep
-    └── cloud
-        ├── execution
-        │   ├── scripts
-        │   │   └── wordpress-relay.sh
-        │   └── wordpress-relay.txt
-        └── setup
-            ├── docker-droplet-setup.txt
-            └── scripts
-                ├── cloned-login-setup.sh
-                └── vnc-and-selenium-setup.sh
-
-27 directories, 38 files
+└─$ git clone https://github.com/pentestplaybook/pager-payloads.git
+Cloning into 'pager-payloads'...
+remote: Enumerating objects: 643, done.
+remote: Counting objects: 100% (311/311), done.
+remote: Compressing objects: 100% (188/188), done.
+remote: Total 643 (delta 107), reused 285 (delta 90), pack-reused 332 (from 3)
+Receiving objects: 100% (643/643), 349.08 KiB | 1.24 MiB/s, done.
+Resolving deltas: 100% (305/305), done.
 
 -------------------------------------------------------------------------------------------------------------
 8. Ensure the Web Root files aren't corrupted (0 bytes):
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user]
-└─$ ls -lah auth-relay-framework/wordpress/captive-portal/setup/pineapple/web-root
+└─$ ls -lah pager-payloads/wordpress_web_root/
 total 52K
-drwxrwxrwx 1 kali kali  512 Nov 22 10:51 .
-drwxrwxrwx 1 kali kali  512 Nov 22 10:51 ..
--rwxrwxrwx 1 kali kali 7.4K Nov 22 10:51 helper.php
--rwxrwxrwx 1 kali kali  118 Nov 22 10:51 index.php
--rwxrwxrwx 1 kali kali 4.0K Nov 22 10:51 login_error.html
--rwxrwxrwx 1 kali kali 4.2K Nov 22 10:51 login.html
--rwxrwxrwx 1 kali kali  725 Nov 22 10:51 login_result.php
--rwxrwxrwx 1 kali kali 4.4K Nov 22 10:51 mfa_failed.html
--rwxrwxrwx 1 kali kali 4.8K Nov 22 10:51 mfa_handler.php
--rwxrwxrwx 1 kali kali 2.5K Nov 22 10:51 mfa.html
--rwxrwxrwx 1 kali kali  670 Nov 22 10:51 mfa_result.php
--rwxrwxrwx 1 kali kali  461 Nov 22 10:51 mfa_status.php
--rwxrwxrwx 1 kali kali  866 Nov 22 10:51 success.html
--rwxrwxrwx 1 kali kali  129 Nov 22 10:51 Wordpress.ep
+drwxrwxrwx 1 kali kali  512 May  9 17:45 .
+drwxrwxrwx 1 kali kali  512 May  9 17:45 ..
+-rwxrwxrwx 1 kali kali 7.4K May  9 17:45 helper.php
+-rwxrwxrwx 1 kali kali  118 May  9 17:45 index.php
+-rwxrwxrwx 1 kali kali 4.0K May  9 17:45 login_error.html
+-rwxrwxrwx 1 kali kali 4.2K May  9 17:45 login.html
+-rwxrwxrwx 1 kali kali  725 May  9 17:45 login_result.php
+-rwxrwxrwx 1 kali kali 4.4K May  9 17:45 mfa_failed.html
+-rwxrwxrwx 1 kali kali 4.8K May  9 17:45 mfa_handler.php
+-rwxrwxrwx 1 kali kali 2.5K May  9 17:45 mfa.html
+-rwxrwxrwx 1 kali kali  670 May  9 17:45 mfa_result.php
+-rwxrwxrwx 1 kali kali  461 May  9 17:45 mfa_status.php
+-rwxrwxrwx 1 kali kali  866 May  9 17:45 success.html
+-rwxrwxrwx 1 kali kali  129 May  9 17:45 Wordpress.ep
 
 -------------------------------------------------------------------------------------------------------------
 9. Transfer the Web Root files to the EvilPortal source directory:
 
 ┌──(kali㉿computername)-[/mnt/c/Users/user/]
-└─$ scp ./auth-relay-framework/wordpress/captive-portal/setup/pineapple/web-root/* root@172.16.42.1:/root/portals/Wordpress/
+└─$ scp ./pager-payloads/wordpress_web_root/* root@172.16.42.1:/root/portals/Wordpress/
 root@172.16.42.1's password:
 helper.php                             100% 7478     1.2MB/s   00:00
 index.php                              100%  118    51.0KB/s   00:00
