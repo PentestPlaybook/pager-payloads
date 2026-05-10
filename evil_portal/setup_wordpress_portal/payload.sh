@@ -2,7 +2,7 @@
 # Name: Setup WordPress Portal
 # Description: Downloads and installs the WordPress captive portal files
 # Author: PentestPlaybook
-# Version: 1.1
+# Version: 1.2
 # Category: Wireless
 
 PORTAL_DIR="/root/portals/Wordpress"
@@ -49,6 +49,10 @@ curl -s -o wp-includes/fonts/dashicons.woff2 "https://wordpress.com/wp-includes/
 curl -s -o wp-includes/fonts/dashicons.ttf "https://wordpress.com/wp-includes/fonts/dashicons.ttf"
 curl -s -o wp-includes/fonts/dashicons.eot "https://wordpress.com/wp-includes/fonts/dashicons.eot"
 LOG "Fonts downloaded."
+
+LOG "Fixing CSS image references..."
+sed -i 's/w-logo-gray\.png/w-logo-blue.png/g; s/wordpress-logo-gray\.svg/wordpress-logo.svg/g' wp-login.css
+LOG "CSS image references fixed."
 
 LOG "Setting permissions..."
 chmod -R 755 "$PORTAL_DIR"
