@@ -208,6 +208,9 @@ Wordpress.ep                           100%  129    62.4KB/s   00:00
 ┌──(kali㉿computername)-[/mnt/c/Users/user/wordpress]
 └─$ curl -s "https://wordpress.com/wp-includes/fonts/dashicons.eot" > wp-includes/fonts/dashicons.eot
 
+┌──(kali㉿computername)-[/mnt/c/Users/user/wordpress]
+└─$ sed -i 's/w-logo-gray\.png/w-logo-blue.png/g; s/wordpress-logo-gray\.svg/wordpress-logo.svg/g' wp-login.css
+
 -------------------------------------------------------------------------------------------------------------
 11. Ensure the static format files are not corrupted (0 bytes):
 
